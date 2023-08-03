@@ -1,0 +1,3 @@
+# PatternFind
+
+Hosting a collection of memory analysis functions, this repository performs scans for patterns within process memory regions. Drawing inspiration from the IDA (Interactive Disassembler) code analysis pattern, these functions search for specific sequences of bytes, commonly referred to as patterns, within memory locations of a running process. This aids in identifying data structures, specific instructions, and other relevant information during reverse engineering and malware analysis activities. The functions employ technical terms such as 'signature,' 'offset,' 'pointer,' 'base address,' and 'memory read' to efficiently and accurately locate and interpret patterns.
