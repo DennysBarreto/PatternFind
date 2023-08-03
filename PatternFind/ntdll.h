@@ -1,0 +1,8080 @@
+/*****************************************************************************/
+/* Ntdll.h                                Copyright (c) Ladislav Zezula 2005 */
+/*---------------------------------------------------------------------------*/
+/* Header file for the import library "Ntdll.lib"                            */
+/*                                                                           */
+/* This library has been created because of never-ending problems when       */
+/* Ntdll.lib from Windows DDK with SDK libs (duplicate symbols, linker       */
+/* errors etc).                                                              */
+/* Now, it is possible to use native NT API with no problems, all you need   */
+/* is just to include this header file                                       */
+/*---------------------------------------------------------------------------*/
+/*   Date    Ver   Who  Comment                                              */
+/* --------  ----  ---  -------                                              */
+/* 15.05.03  1.00  Lad  The first version of Ntdll.h                         */
+/* 16.09.05  2.00  Lad  Far more functions                                   */
+/*****************************************************************************/
+
+#pragma comment(lib, "Kernel32.lib")
+
+static NTSTATUS(NTAPI* NtWow64QueryInformationProcess64)(
+	IN HANDLE ProcessHandle,
+	ULONG ProcessInformationClass,
+	OUT PVOID ProcessInformation,
+	IN ULONG ProcessInformationLength,
+	OUT PULONG ReturnLength OPTIONAL
+	) = nullptr;
+
+// NtQueryInformationProcess for 32-bit process on WOW64
+static NTSTATUS(NTAPI* NtWow64ReadVirtualMemory64)(
+	IN HANDLE ProcessHandle,
+	IN PVOID64 BaseAddress,
+	OUT PVOID Buffer,
+	IN ULONG64 Size,
+	OUT PULONG64 NumberOfBytesRead)
+	= nullptr;
+
+
+#ifndef FlagOn
+#define FlagOn(_F,_SF)        ((_F) & (_SF))
+#endif
+
+#ifndef BooleanFlagOn
+#define BooleanFlagOn(F,SF)   ((BOOLEAN)(((F) & (SF)) != 0))
+#endif
+
+#ifndef SetFlag
+#define SetFlag(_F,_SF)       ((_F) |= (_SF))
+#endif
+
+#ifndef ClearFlag
+#define ClearFlag(_F,_SF)     ((_F) &= ~(_SF))
+#endif
+
+
+#ifndef IN_REGION
+#define IN_RANGE(x, a, b) ((x) >= (a) && (x) <= (b))
+#endif
+
+#ifndef IN_REGION
+// For calc pointer inside region page
+#define IN_REGION(x, Base, Size) (((ULONG_PTR)(x) >= (ULONG_PTR)(Base)) && \
+			((ULONG_PTR)(x) <= (ULONG_PTR)(Base) + (ULONG_PTR)(Size)))
+#endif
+
+#ifndef PAGE_SIZE
+#define PAGE_SIZE 0x1000ull
+#endif
+
+#ifndef RtlOffsetToPointer
+#define RtlOffsetToPointer(Base, Offset)  ((PCHAR)( ((PCHAR)(Base)) + ((ULONG_PTR)(Offset))  ))
+#endif
+
+#ifndef RtlPointerToOffset
+#define RtlPointerToOffset(Base, Pointer)  ((ULONG)( ((PCHAR)(Pointer)) - ((PCHAR)(Base))  ))
+#endif
+
+//
+// Define alignment macros to align structure sizes and pointers up and down.
+//
+
+#ifndef ALIGN_UP_TYPE
+#define ALIGN_UP_TYPE(Address, Align) (((ULONG_PTR)(Address) + (Align) - 1) & ~((Align) - 1))
+#endif
+
+#ifndef ALIGN_UP
+#define ALIGN_UP(Address, Type) ALIGN_UP_TYPE(Address, sizeof(Type))
+#endif
+
+#ifndef ALIGN_DOWN_TYPE
+#define ALIGN_DOWN_TYPE(Address, Align) ((ULONG_PTR)(Address) & ~((ULONG_PTR)(Align) - 1))
+#endif
+
+#ifndef ALIGN_DOWN
+#define ALIGN_DOWN(Address, Type) ALIGN_DOWN_TYPE(Address, sizeof(Type))
+#endif
+
+#ifndef ALIGN_UP_BY
+#define ALIGN_UP_BY(Address, Align) (((ULONG_PTR)(Address) + (Align) - 1) & ~((Align) - 1))
+#endif
+
+#ifndef ALIGN_DOWN_BY
+#define ALIGN_DOWN_BY(Address, Align) ((ULONG_PTR)(Address) & ~((ULONG_PTR)(Align) - 1))
+#endif
+
+#ifndef ALIGN_UP_POINTER_BY
+#define ALIGN_UP_POINTER_BY(Pointer, Align) ((PVOID)ALIGN_UP_BY(Pointer, Align))
+#endif
+
+#ifndef ALIGN_DOWN_POINTER_BY
+#define ALIGN_DOWN_POINTER_BY(Pointer, Align) ((PVOID)ALIGN_DOWN_BY(Pointer, Align))
+#endif
+
+#ifndef ALIGN_UP_POINTER
+#define ALIGN_UP_POINTER(Pointer, Type) ((PVOID)ALIGN_UP(Pointer, Type))
+#endif
+
+#ifndef ALIGN_DOWN_POINTER
+#define ALIGN_DOWN_POINTER(Pointer, Type) ((PVOID)ALIGN_DOWN(Pointer, Type))
+#endif
+
+#ifndef ARGUMENT_PRESENT
+#define ARGUMENT_PRESENT(ArgumentPointer)    (\
+	(CHAR *)((ULONG_PTR)(ArgumentPointer)) != (CHAR *)(NULL) )
+#endif
+
+#ifndef LOGICAL
+#define LOGICAL ULONG
+#endif
+
+#ifndef PTR_ADD_OFFSET
+#define PTR_ADD_OFFSET(Pointer, Offset) ((PVOID)((ULONG_PTR)(Pointer) + (ULONG_PTR)(Offset)))
+#endif
+
+#ifndef PTR64_ADD_OFFSET
+#define PTR64_ADD_OFFSET(Pointer, Offset) ((PVOID64)((ULONG64)(Pointer) + (ULONG64)(Offset)))
+#endif
+
+#ifndef FOR_EACH_LIST_ENTRY
+#define FOR_EACH_LIST_ENTRY(item, head) \
+    for (item = (head)->Flink; item != (head); item = item->Flink)
+#endif
+
+#ifndef FOR_EACH_LIST_ENTRY_EX
+#define FOR_EACH_LIST_ENTRY_EX(item_var, head) \
+    for (PLIST_ENTRY item_var = (head)->Flink; item_var != (head); item_var = item_var->Flink)
+#endif
+
+typedef struct _PROCESS_BASIC_INFORMATION_WOW64 {
+	PVOID Reserved1[2];
+	PVOID64 PebBaseAddress;
+	PVOID Reserved2[4];
+	ULONG_PTR UniqueProcessId[2];
+	PVOID Reserved3[2];
+} PROCESS_BASIC_INFORMATION_WOW64, * PPROCESS_BASIC_INFORMATION_WOW64;
+
+typedef struct _UNICODE_STRING_WOW64 {
+	USHORT Length;
+	USHORT MaximumLength;
+	PVOID64 Buffer;
+} UNICODE_STRING_WOW64;
+
+#undef RtlZeroMemory
+#undef RtlSecureZeroMemory
+#undef RtlMoveMemory
+
+
+#ifndef __NTDLL_H__
+#define __NTDLL_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifdef _NTDDK_
+	//#error This header cannot be compiled together with NTDDK
+#endif
+
+#ifndef _NTDLL_SELF_                            // Auto-insert the library
+#pragma comment(lib, "Ntdll.lib")
+#endif
+
+#pragma warning(disable: 4201)                  // nonstandard extension used : nameless struct/union
+
+	//------------------------------------------------------------------------------
+	// Defines for NTSTATUS
+
+	typedef long NTSTATUS;
+
+#define STATUS_BUFFER_TOO_SMALL		((NTSTATUS)0xC0000023L)
+#define STATUS_INFO_LENGTH_MISMATCH 0xC0000004
+
+#ifndef NT_SUCCESS
+#define NT_SUCCESS(Status) ((NTSTATUS)(Status) >= 0)
+#endif
+
+#ifndef STATUS_SUCCESS
+#define STATUS_SUCCESS       ((NTSTATUS)0x00000000L)
+#endif
+
+#ifndef STATUS_UNSUCCESSFUL
+#define STATUS_UNSUCCESSFUL ((NTSTATUS)0xC0000001L)
+#endif
+
+#define DUPLICATE_SAME_ATTRIBUTES 0x00000004
+
+#define RESOURCE_TYPE_LEVEL                     0
+#define RESOURCE_NAME_LEVEL                     1
+#define RESOURCE_LANGUAGE_LEVEL                 2
+#define RESOURCE_DATA_LEVEL                     3
+
+#define LDRP_STATIC_LINK                        0x00000002
+#define LDRP_IMAGE_DLL                          0x00000004
+#define LDRP_SHIMENG_SUPPRESSED_ENTRY           0x00000008
+#define LDRP_LOAD_IN_PROGRESS                   0x00001000
+#define LDRP_UNLOAD_IN_PROGRESS                 0x00002000
+#define LDRP_ENTRY_PROCESSED                    0x00004000
+#define LDRP_ENTRY_INSERTED                     0x00008000
+#define LDRP_CURRENT_LOAD                       0x00010000
+#define LDRP_FAILED_BUILTIN_LOAD                0x00020000
+#define LDRP_DONT_CALL_FOR_THREADS              0x00040000
+#define LDRP_PROCESS_ATTACH_CALLED              0x00080000
+#define LDRP_DEBUG_SYMBOLS_LOADED               0x00100000
+#define LDRP_IMAGE_NOT_AT_BASE                  0x00200000
+#define LDRP_COR_IMAGE                          0x00400000
+#define LDR_COR_OWNS_UNMAP                      0x00800000
+#define LDRP_SYSTEM_MAPPED                      0x01000000
+#define LDRP_IMAGE_VERIFYING                    0x02000000
+#define LDRP_DRIVER_DEPENDENT_DLL               0x04000000
+#define LDRP_ENTRY_NATIVE                       0x08000000
+#define LDRP_REDIRECTED                         0x10000000
+#define LDRP_NON_PAGED_DEBUG_INFO               0x20000000
+#define LDRP_MM_LOADED                          0x40000000
+#define LDRP_COMPAT_DATABASE_PROCESSED          0x80000000
+
+	/*GLOBAL THREADS FLAGS*/
+#define FLG_STOP_ON_EXCEPTION                   0x00000001
+#define FLG_SHOW_LDR_SNAPS                      0x00000002
+#define FLG_DEBUG_INITIAL_COMMAND               0x00000004
+#define FLG_STOP_ON_HUNG_GUI                    0x00000008
+#define FLG_HEAP_ENABLE_TAIL_CHECK              0x00000010
+#define FLG_HEAP_ENABLE_FREE_CHECK              0x00000020
+#define FLG_HEAP_VALIDATE_PARAMETERS            0x00000040
+#define FLG_HEAP_VALIDATE_ALL                   0x00000080
+#define FLG_APPLICATION_VERIFIER                0x00000100
+#define FLG_POOL_ENABLE_TAGGING                 0x00000400
+#define FLG_HEAP_ENABLE_TAGGING                 0x00000800
+#define FLG_USER_STACK_TRACE_DB                 0x00001000
+#define FLG_KERNEL_STACK_TRACE_DB               0x00002000
+#define FLG_MAINTAIN_OBJECT_TYPELIST            0x00004000
+#define FLG_HEAP_ENABLE_TAG_BY_DLL              0x00008000
+#define FLG_DISABLE_STACK_EXTENSION             0x00010000
+#define FLG_ENABLE_CSRDEBUG                     0x00020000
+#define FLG_ENABLE_KDEBUG_SYMBOL_LOAD           0x00040000
+#define FLG_DISABLE_PAGE_KERNEL_STACKS          0x00080000
+#if (NTDDI_VERSION < NTDDI_WINXP)
+#define FLG_HEAP_ENABLE_CALL_TRACING            0x00100000
+#else
+#define FLG_ENABLE_SYSTEM_CRIT_BREAKS           0x00100000
+#endif
+#define FLG_HEAP_DISABLE_COALESCING             0x00200000
+#define FLG_ENABLE_CLOSE_EXCEPTIONS             0x00400000
+#define FLG_ENABLE_EXCEPTION_LOGGING            0x00800000
+#define FLG_ENABLE_HANDLE_TYPE_TAGGING          0x01000000
+#define FLG_HEAP_PAGE_ALLOCS                    0x02000000
+#define FLG_DEBUG_INITIAL_COMMAND_EX            0x04000000
+#define FLG_VALID_BITS                          0x07FFFFFF
+
+#define LDRP_UPDATE_REFCOUNT   0x01
+#define LDRP_UPDATE_DEREFCOUNT 0x02
+#define LDRP_UPDATE_PIN        0x03
+
+#define LDR_IGNORE_CODE_AUTHZ_LEVEL                 0x00001000
+#define LDR_ADDREF_DLL_PIN                          0x00000001
+#define LDR_LOCK_LOADER_LOCK_FLAG_RAISE_ON_ERRORS   0x00000001
+#define LDR_LOCK_LOADER_LOCK_FLAG_TRY_ONLY          0x00000002
+#define LDR_UNLOCK_LOADER_LOCK_FLAG_RAISE_ON_ERRORS 0x00000001
+#define LDR_GET_DLL_HANDLE_EX_UNCHANGED_REFCOUNT    0x00000001
+#define LDR_GET_DLL_HANDLE_EX_PIN                   0x00000002
+
+#define LDR_LOCK_LOADER_LOCK_DISPOSITION_INVALID           0
+#define LDR_LOCK_LOADER_LOCK_DISPOSITION_LOCK_ACQUIRED     1
+#define LDR_LOCK_LOADER_LOCK_DISPOSITION_LOCK_NOT_ACQUIRED 2
+
+#define IMAGE_SCN_TYPE_NOLOAD                   0x00000002
+
+#define LDR_IS_DATAFILE(handle)     (((ULONG_PTR)(handle)) & (ULONG_PTR)1)
+#define LDR_IS_IMAGEMAPPING(handle) (((ULONG_PTR)(handle)) & (ULONG_PTR)2)
+#define LDR_IS_RESOURCE(handle)     (LDR_IS_IMAGEMAPPING(handle) || LDR_IS_DATAFILE(handle))
+
+#define IMAGE_LOADER_FLAGS_COMPLUS 0x00000001
+#define IMAGE_LOADER_FLAGS_SYSTEM_GLOBAL 0x01000000
+
+#define STATUS_SEVERITY_SUCCESS           0x0
+#define STATUS_SEVERITY_INFORMATIONAL     0x1
+#define STATUS_SEVERITY_WARNING           0x2
+#define STATUS_SEVERITY_ERROR             0x3
+#define STATUS_WAIT_1                             ((NTSTATUS)0x00000001)
+#define STATUS_WAIT_2                             ((NTSTATUS)0x00000002)
+#define STATUS_WAIT_3                             ((NTSTATUS)0x00000003)
+#define STATUS_WAIT_63                            ((NTSTATUS)0x0000003f)
+#define STATUS_ABANDONED                          ((NTSTATUS)0x00000080)
+#define STATUS_ABANDONED_WAIT_63                  ((NTSTATUS)0x000000BF)
+#define STATUS_KERNEL_APC                         ((NTSTATUS)0x00000100)
+#define STATUS_ALERTED                            ((NTSTATUS)0x00000101)
+#define STATUS_REPARSE                            ((NTSTATUS)0x00000104)
+#define STATUS_MORE_ENTRIES                       ((NTSTATUS)0x00000105)
+#define STATUS_NOT_ALL_ASSIGNED                   ((NTSTATUS)0x00000106)
+#define STATUS_SOME_NOT_MAPPED                    ((NTSTATUS)0x00000107)
+#define STATUS_OPLOCK_BREAK_IN_PROGRESS           ((NTSTATUS)0x00000108)
+#define STATUS_VOLUME_MOUNTED                     ((NTSTATUS)0x00000109)
+#define STATUS_RXACT_COMMITTED                    ((NTSTATUS)0x0000010A)
+#define STATUS_NOTIFY_CLEANUP                     ((NTSTATUS)0x0000010B)
+#define STATUS_NOTIFY_ENUM_DIR                    ((NTSTATUS)0x0000010C)
+#define STATUS_NO_QUOTAS_FOR_ACCOUNT              ((NTSTATUS)0x0000010D)
+#define STATUS_PRIMARY_TRANSPORT_CONNECT_FAILED   ((NTSTATUS)0x0000010E)
+#define STATUS_PAGE_FAULT_TRANSITION              ((NTSTATUS)0x00000110)
+#define STATUS_PAGE_FAULT_DEMAND_ZERO             ((NTSTATUS)0x00000111)
+#define STATUS_PAGE_FAULT_COPY_ON_WRITE           ((NTSTATUS)0x00000112)
+#define STATUS_PAGE_FAULT_GUARD_PAGE              ((NTSTATUS)0x00000113)
+#define STATUS_PAGE_FAULT_PAGING_FILE             ((NTSTATUS)0x00000114)
+#define STATUS_CACHE_PAGE_LOCKED                  ((NTSTATUS)0x00000115)
+#define STATUS_CRASH_DUMP                         ((NTSTATUS)0x00000116)
+#define STATUS_BUFFER_ALL_ZEROS                   ((NTSTATUS)0x00000117)
+#define STATUS_REPARSE_OBJECT                     ((NTSTATUS)0x00000118)
+#define STATUS_RESOURCE_REQUIREMENTS_CHANGED      ((NTSTATUS)0x00000119)
+#define STATUS_TRANSLATION_COMPLETE               ((NTSTATUS)0x00000120)
+#define STATUS_DS_MEMBERSHIP_EVALUATED_LOCALLY    ((NTSTATUS)0x00000121)
+#define STATUS_NOTHING_TO_TERMINATE               ((NTSTATUS)0x00000122)
+#define STATUS_PROCESS_NOT_IN_JOB                 ((NTSTATUS)0x00000123)
+#define STATUS_PROCESS_IN_JOB                     ((NTSTATUS)0x00000124)
+#define STATUS_VOLSNAP_HIBERNATE_READY            ((NTSTATUS)0x00000125)
+#define STATUS_FSFILTER_OP_COMPLETED_SUCCESSFULLY ((NTSTATUS)0x00000126)
+#define STATUS_FILE_LOCKED_WITH_ONLY_READERS      ((NTSTATUS)0x0000012A)
+#define STATUS_FILE_LOCKED_WITH_WRITERS           ((NTSTATUS)0x0000012B)
+
+#define STATUS_OBJECT_NAME_EXISTS              ((NTSTATUS)0x40000000)
+#define STATUS_THREAD_WAS_SUSPENDED            ((NTSTATUS)0x40000001)
+#define STATUS_WORKING_SET_LIMIT_RANGE         ((NTSTATUS)0x40000002)
+#define STATUS_IMAGE_NOT_AT_BASE               ((NTSTATUS)0x40000003)
+#define STATUS_RXACT_STATE_CREATED             ((NTSTATUS)0x40000004)
+#define STATUS_LOCAL_USER_SESSION_KEY          ((NTSTATUS)0x40000006)
+#define STATUS_BAD_CURRENT_DIRECTORY           ((NTSTATUS)0x40000007)
+#define STATUS_SERIAL_MORE_WRITES              ((NTSTATUS)0x40000008)
+#define STATUS_REGISTRY_RECOVERED              ((NTSTATUS)0x40000009)
+#define STATUS_FT_READ_RECOVERY_FROM_BACKUP    ((NTSTATUS)0x4000000A)
+#define STATUS_FT_WRITE_RECOVERY               ((NTSTATUS)0x4000000B)
+#define STATUS_SERIAL_COUNTER_TIMEOUT          ((NTSTATUS)0x4000000C)
+#define STATUS_NULL_LM_PASSWORD                ((NTSTATUS)0x4000000D)
+#define STATUS_IMAGE_MACHINE_TYPE_MISMATCH     ((NTSTATUS)0x4000000E)
+#define STATUS_RECEIVE_PARTIAL                 ((NTSTATUS)0x4000000F)
+#define STATUS_RECEIVE_EXPEDITED               ((NTSTATUS)0x40000010)
+#define STATUS_RECEIVE_PARTIAL_EXPEDITED       ((NTSTATUS)0x40000011)
+#define STATUS_EVENT_DONE                      ((NTSTATUS)0x40000012)
+#define STATUS_EVENT_PENDING                   ((NTSTATUS)0x40000013)
+#define STATUS_CHECKING_FILE_SYSTEM            ((NTSTATUS)0x40000014)
+#define STATUS_PREDEFINED_HANDLE               ((NTSTATUS)0x40000016)
+#define STATUS_WAS_UNLOCKED                    ((NTSTATUS)0x40000017)
+#define STATUS_SERVICE_NOTIFICATION            ((NTSTATUS)0x40000018)
+#define STATUS_WAS_LOCKED                      ((NTSTATUS)0x40000019)
+#define STATUS_LOG_HARD_ERROR                  ((NTSTATUS)0x4000001A)
+#define STATUS_ALREADY_WIN32                   ((NTSTATUS)0x4000001B)
+#define STATUS_WX86_UNSIMULATE                 ((NTSTATUS)0x4000001C)
+#define STATUS_WX86_CONTINUE                   ((NTSTATUS)0x4000001D)
+#define STATUS_WX86_SINGLE_STEP                ((NTSTATUS)0x4000001E)
+#define STATUS_WX86_BREAKPOINT                 ((NTSTATUS)0x4000001F)
+#define STATUS_WX86_EXCEPTION_CONTINUE         ((NTSTATUS)0x40000020)
+#define STATUS_WX86_EXCEPTION_LASTCHANCE       ((NTSTATUS)0x40000021)
+#define STATUS_WX86_EXCEPTION_CHAIN            ((NTSTATUS)0x40000022)
+#define STATUS_IMAGE_MACHINE_TYPE_MISMATCH_EXE ((NTSTATUS)0x40000023)
+#define STATUS_NO_YIELD_PERFORMED              ((NTSTATUS)0x40000024)
+#define STATUS_TIMER_RESUME_IGNORED            ((NTSTATUS)0x40000025)
+#define STATUS_ARBITRATION_UNHANDLED           ((NTSTATUS)0x40000026)
+#define STATUS_CARDBUS_NOT_SUPPORTED           ((NTSTATUS)0x40000027)
+#define STATUS_WX86_CREATEWX86TIB              ((NTSTATUS)0x40000028)
+#define STATUS_MP_PROCESSOR_MISMATCH           ((NTSTATUS)0x40000029)
+#define STATUS_HIBERNATED                      ((NTSTATUS)0x4000002A)
+#define STATUS_RESUME_HIBERNATION              ((NTSTATUS)0x4000002B)
+#define STATUS_FIRMWARE_UPDATED                ((NTSTATUS)0x4000002C)
+#define STATUS_WAKE_SYSTEM                     ((NTSTATUS)0x40000294)
+#define STATUS_DS_SHUTTING_DOWN                ((NTSTATUS)0x40000370)
+
+#define RPC_NT_UUID_LOCAL_ONLY           ((NTSTATUS)0x40020056)
+#define RPC_NT_SEND_INCOMPLETE           ((NTSTATUS)0x400200AF)
+
+#define STATUS_CTX_CDM_CONNECT           ((NTSTATUS)0x400A0004)
+#define STATUS_CTX_CDM_DISCONNECT        ((NTSTATUS)0x400A0005)
+
+#define STATUS_SXS_RELEASE_ACTIVATION_CONTEXT  ((NTSTATUS)0x4015000D)
+
+#define STATUS_BUFFER_OVERFLOW                  ((NTSTATUS)0x80000005)
+#define STATUS_NO_MORE_FILES                    ((NTSTATUS)0x80000006)
+#define STATUS_WAKE_SYSTEM_DEBUGGER             ((NTSTATUS)0x80000007)
+
+#define STATUS_HANDLES_CLOSED                   ((NTSTATUS)0x8000000A)
+#define STATUS_NO_INHERITANCE                   ((NTSTATUS)0x8000000B)
+#define STATUS_GUID_SUBSTITUTION_MADE           ((NTSTATUS)0x8000000C)
+#define STATUS_PARTIAL_COPY                     ((NTSTATUS)0x8000000D)
+#define STATUS_DEVICE_PAPER_EMPTY               ((NTSTATUS)0x8000000E)
+#define STATUS_DEVICE_POWERED_OFF               ((NTSTATUS)0x8000000F)
+#define STATUS_DEVICE_OFF_LINE                  ((NTSTATUS)0x80000010)
+#define STATUS_DEVICE_BUSY                      ((NTSTATUS)0x80000011)
+#define STATUS_NO_MORE_EAS                      ((NTSTATUS)0x80000012)
+#define STATUS_INVALID_EA_NAME                  ((NTSTATUS)0x80000013)
+#define STATUS_EA_LIST_INCONSISTENT             ((NTSTATUS)0x80000014)
+#define STATUS_INVALID_EA_FLAG                  ((NTSTATUS)0x80000015)
+#define STATUS_VERIFY_REQUIRED                  ((NTSTATUS)0x80000016)
+#define STATUS_EXTRANEOUS_INFORMATION           ((NTSTATUS)0x80000017)
+#define STATUS_RXACT_COMMIT_NECESSARY           ((NTSTATUS)0x80000018)
+#define STATUS_NO_MORE_ENTRIES                  ((NTSTATUS)0x8000001A)
+#define STATUS_FILEMARK_DETECTED                ((NTSTATUS)0x8000001B)
+#define STATUS_MEDIA_CHANGED                    ((NTSTATUS)0x8000001C)
+#define STATUS_BUS_RESET                        ((NTSTATUS)0x8000001D)
+#define STATUS_END_OF_MEDIA                     ((NTSTATUS)0x8000001E)
+#define STATUS_BEGINNING_OF_MEDIA               ((NTSTATUS)0x8000001F)
+#define STATUS_MEDIA_CHECK                      ((NTSTATUS)0x80000020)
+#define STATUS_SETMARK_DETECTED                 ((NTSTATUS)0x80000021)
+#define STATUS_NO_DATA_DETECTED                 ((NTSTATUS)0x80000022)
+#define STATUS_REDIRECTOR_HAS_OPEN_HANDLES      ((NTSTATUS)0x80000023)
+#define STATUS_SERVER_HAS_OPEN_HANDLES          ((NTSTATUS)0x80000024)
+#define STATUS_ALREADY_DISCONNECTED             ((NTSTATUS)0x80000025)
+#define STATUS_CLEANER_CARTRIDGE_INSTALLED      ((NTSTATUS)0x80000027)
+#define STATUS_PLUGPLAY_QUERY_VETOED            ((NTSTATUS)0x80000028)
+#define STATUS_REGISTRY_HIVE_RECOVERED          ((NTSTATUS)0x8000002A)
+#define STATUS_DLL_MIGHT_BE_INSECURE            ((NTSTATUS)0x8000002B)
+#define STATUS_DLL_MIGHT_BE_INCOMPATIBLE        ((NTSTATUS)0x8000002C)
+#define STATUS_STOPPED_ON_SYMLINK               ((NTSTATUS)0x8000002D)
+
+#define STATUS_DEVICE_REQUIRES_CLEANING         ((NTSTATUS)0x80000288)
+#define STATUS_DEVICE_DOOR_OPEN                 ((NTSTATUS)0x80000289)
+
+#define STATUS_CLUSTER_NODE_ALREADY_UP          ((NTSTATUS)0x80130001)
+#define STATUS_CLUSTER_NODE_ALREADY_DOWN        ((NTSTATUS)0x80130002)
+#define STATUS_CLUSTER_NETWORK_ALREADY_ONLINE   ((NTSTATUS)0x80130003)
+#define STATUS_CLUSTER_NETWORK_ALREADY_OFFLINE  ((NTSTATUS)0x80130004)
+#define STATUS_CLUSTER_NODE_ALREADY_MEMBER      ((NTSTATUS)0x80130005)
+
+#define STATUS_NOT_IMPLEMENTED                  ((NTSTATUS)0xC0000002)
+#define STATUS_INVALID_INFO_CLASS               ((NTSTATUS)0xC0000003)
+#define STATUS_PAGEFILE_QUOTA                   ((NTSTATUS)0xC0000007)
+#define STATUS_BAD_INITIAL_STACK                ((NTSTATUS)0xC0000009)
+#define STATUS_BAD_INITIAL_PC                   ((NTSTATUS)0xC000000A)
+#define STATUS_INVALID_CID                      ((NTSTATUS)0xC000000B)
+#define STATUS_TIMER_NOT_CANCELED               ((NTSTATUS)0xC000000C)
+#define STATUS_NO_SUCH_DEVICE                   ((NTSTATUS)0xC000000E)
+#define STATUS_NO_SUCH_FILE                     ((NTSTATUS)0xC000000F)
+#define STATUS_INVALID_DEVICE_REQUEST           ((NTSTATUS)0xC0000010)
+#define STATUS_END_OF_FILE                      ((NTSTATUS)0xC0000011)
+#define STATUS_WRONG_VOLUME                     ((NTSTATUS)0xC0000012)
+#define STATUS_NO_MEDIA_IN_DEVICE               ((NTSTATUS)0xC0000013)
+#define STATUS_UNRECOGNIZED_MEDIA               ((NTSTATUS)0xC0000014)
+#define STATUS_NONEXISTENT_SECTOR               ((NTSTATUS)0xC0000015)
+#define STATUS_MORE_PROCESSING_REQUIRED         ((NTSTATUS)0xC0000016)
+#define STATUS_CONFLICTING_ADDRESSES            ((NTSTATUS)0xC0000018)
+#define STATUS_NOT_MAPPED_VIEW                  ((NTSTATUS)0xC0000019)
+#define STATUS_UNABLE_TO_FREE_VM                ((NTSTATUS)0xC000001A)
+#define STATUS_UNABLE_TO_DELETE_SECTION         ((NTSTATUS)0xC000001B)
+#define STATUS_INVALID_SYSTEM_SERVICE           ((NTSTATUS)0xC000001C)
+#define STATUS_INVALID_LOCK_SEQUENCE            ((NTSTATUS)0xC000001E)
+#define STATUS_INVALID_VIEW_SIZE                ((NTSTATUS)0xC000001F)
+#define STATUS_INVALID_FILE_FOR_SECTION         ((NTSTATUS)0xC0000020)
+#define STATUS_ALREADY_COMMITTED                ((NTSTATUS)0xC0000021)
+#define STATUS_OBJECT_TYPE_MISMATCH             ((NTSTATUS)0xC0000024)
+#define STATUS_UNWIND                           ((NTSTATUS)0xC0000027)
+#define STATUS_BAD_STACK                        ((NTSTATUS)0xC0000028)
+#define STATUS_INVALID_UNWIND_TARGET            ((NTSTATUS)0xC0000029)
+#define STATUS_NOT_LOCKED                       ((NTSTATUS)0xC000002A)
+#define STATUS_PARITY_ERROR                     ((NTSTATUS)0xC000002B)
+#define STATUS_UNABLE_TO_DECOMMIT_VM            ((NTSTATUS)0xC000002C)
+#define STATUS_NOT_COMMITTED                    ((NTSTATUS)0xC000002D)
+#define STATUS_INVALID_PORT_ATTRIBUTES          ((NTSTATUS)0xC000002E)
+#define STATUS_PORT_MESSAGE_TOO_LONG            ((NTSTATUS)0xC000002F)
+#define STATUS_INVALID_PARAMETER_MIX            ((NTSTATUS)0xC0000030)
+#define STATUS_INVALID_QUOTA_LOWER              ((NTSTATUS)0xC0000031)
+#define STATUS_DISK_CORRUPT_ERROR               ((NTSTATUS)0xC0000032)
+#define STATUS_OBJECT_NAME_INVALID              ((NTSTATUS)0xC0000033)
+#define STATUS_OBJECT_NAME_NOT_FOUND            ((NTSTATUS)0xC0000034)
+#define STATUS_OBJECT_NAME_COLLISION            ((NTSTATUS)0xC0000035)
+#define STATUS_PORT_DISCONNECTED                ((NTSTATUS)0xC0000037)
+#define STATUS_DEVICE_ALREADY_ATTACHED          ((NTSTATUS)0xC0000038)
+#define STATUS_OBJECT_PATH_INVALID              ((NTSTATUS)0xC0000039)
+#define STATUS_OBJECT_PATH_NOT_FOUND            ((NTSTATUS)0xC000003A)
+#define STATUS_OBJECT_PATH_SYNTAX_BAD           ((NTSTATUS)0xC000003B)
+#define STATUS_DATA_OVERRUN                     ((NTSTATUS)0xC000003C)
+#define STATUS_DATA_LATE_ERROR                  ((NTSTATUS)0xC000003D)
+#define STATUS_DATA_ERROR                       ((NTSTATUS)0xC000003E)
+#define STATUS_CRC_ERROR                        ((NTSTATUS)0xC000003F)
+#define STATUS_SECTION_TOO_BIG                  ((NTSTATUS)0xC0000040)
+#define STATUS_PORT_CONNECTION_REFUSED          ((NTSTATUS)0xC0000041)
+#define STATUS_INVALID_PORT_HANDLE              ((NTSTATUS)0xC0000042)
+#define STATUS_SHARING_VIOLATION                ((NTSTATUS)0xC0000043)
+#define STATUS_QUOTA_EXCEEDED                   ((NTSTATUS)0xC0000044)
+#define STATUS_INVALID_PAGE_PROTECTION          ((NTSTATUS)0xC0000045)
+#define STATUS_MUTANT_NOT_OWNED                 ((NTSTATUS)0xC0000046)
+#define STATUS_SEMAPHORE_LIMIT_EXCEEDED         ((NTSTATUS)0xC0000047)
+#define STATUS_PORT_ALREADY_SET                 ((NTSTATUS)0xC0000048)
+#define STATUS_SECTION_NOT_IMAGE                ((NTSTATUS)0xC0000049)
+#define STATUS_SUSPEND_COUNT_EXCEEDED           ((NTSTATUS)0xC000004A)
+#define STATUS_THREAD_IS_TERMINATING            ((NTSTATUS)0xC000004B)
+#define STATUS_BAD_WORKING_SET_LIMIT            ((NTSTATUS)0xC000004C)
+#define STATUS_INCOMPATIBLE_FILE_MAP            ((NTSTATUS)0xC000004D)
+#define STATUS_SECTION_PROTECTION               ((NTSTATUS)0xC000004E)
+#define STATUS_EAS_NOT_SUPPORTED                ((NTSTATUS)0xC000004F)
+#define STATUS_EA_TOO_LARGE                     ((NTSTATUS)0xC0000050)
+#define STATUS_NONEXISTENT_EA_ENTRY             ((NTSTATUS)0xC0000051)
+#define STATUS_NO_EAS_ON_FILE                   ((NTSTATUS)0xC0000052)
+#define STATUS_EA_CORRUPT_ERROR                 ((NTSTATUS)0xC0000053)
+#define STATUS_FILE_LOCK_CONFLICT               ((NTSTATUS)0xC0000054)
+#define STATUS_LOCK_NOT_GRANTED                 ((NTSTATUS)0xC0000055)
+#define STATUS_DELETE_PENDING                   ((NTSTATUS)0xC0000056)
+#define STATUS_CTL_FILE_NOT_SUPPORTED           ((NTSTATUS)0xC0000057)
+#define STATUS_UNKNOWN_REVISION                 ((NTSTATUS)0xC0000058)
+#define STATUS_REVISION_MISMATCH                ((NTSTATUS)0xC0000059)
+#define STATUS_INVALID_OWNER                    ((NTSTATUS)0xC000005A)
+#define STATUS_INVALID_PRIMARY_GROUP            ((NTSTATUS)0xC000005B)
+#define STATUS_NO_IMPERSONATION_TOKEN           ((NTSTATUS)0xC000005C)
+#define STATUS_CANT_DISABLE_MANDATORY           ((NTSTATUS)0xC000005D)
+#define STATUS_NO_LOGON_SERVERS                 ((NTSTATUS)0xC000005E)
+#ifndef STATUS_NO_SUCH_LOGON_SESSION
+#define STATUS_NO_SUCH_LOGON_SESSION            ((NTSTATUS)0xC000005F)
+#endif
+#define STATUS_NO_SUCH_PRIVILEGE                ((NTSTATUS)0xC0000060)
+#define STATUS_PRIVILEGE_NOT_HELD               ((NTSTATUS)0xC0000061)
+#define STATUS_INVALID_ACCOUNT_NAME             ((NTSTATUS)0xC0000062)
+#define STATUS_USER_EXISTS                      ((NTSTATUS)0xC0000063)
+#ifndef STATUS_NO_SUCH_USER
+#define STATUS_NO_SUCH_USER                     ((NTSTATUS)0xC0000064)
+#endif
+#define STATUS_GROUP_EXISTS                     ((NTSTATUS)0xC0000065)
+#define STATUS_NO_SUCH_GROUP                    ((NTSTATUS)0xC0000066)
+#define STATUS_MEMBER_IN_GROUP                  ((NTSTATUS)0xC0000067)
+#define STATUS_MEMBER_NOT_IN_GROUP              ((NTSTATUS)0xC0000068)
+#define STATUS_LAST_ADMIN                       ((NTSTATUS)0xC0000069)
+#define STATUS_ILL_FORMED_PASSWORD              ((NTSTATUS)0xC000006B)
+#define STATUS_PASSWORD_RESTRICTION             ((NTSTATUS)0xC000006C)
+#define STATUS_INVALID_LOGON_HOURS              ((NTSTATUS)0xC000006F)
+#define STATUS_INVALID_WORKSTATION              ((NTSTATUS)0xC0000070)
+#define STATUS_NONE_MAPPED                      ((NTSTATUS)0xC0000073)
+#define STATUS_TOO_MANY_LUIDS_REQUESTED         ((NTSTATUS)0xC0000074)
+#define STATUS_LUIDS_EXHAUSTED                  ((NTSTATUS)0xC0000075)
+#define STATUS_INVALID_SUB_AUTHORITY            ((NTSTATUS)0xC0000076)
+#define STATUS_INVALID_ACL                      ((NTSTATUS)0xC0000077)
+#define STATUS_INVALID_SID                      ((NTSTATUS)0xC0000078)
+#define STATUS_INVALID_SECURITY_DESCR           ((NTSTATUS)0xC0000079)
+#define STATUS_PROCEDURE_NOT_FOUND              ((NTSTATUS)0xC000007A)
+#define STATUS_INVALID_IMAGE_FORMAT             ((NTSTATUS)0xC000007B)
+#define STATUS_NO_TOKEN                         ((NTSTATUS)0xC000007C)
+#define STATUS_BAD_INHERITANCE_ACL              ((NTSTATUS)0xC000007D)
+#define STATUS_RANGE_NOT_LOCKED                 ((NTSTATUS)0xC000007E)
+#define STATUS_DISK_FULL                        ((NTSTATUS)0xC000007F)
+#define STATUS_SERVER_DISABLED                  ((NTSTATUS)0xC0000080)
+#define STATUS_SERVER_NOT_DISABLED              ((NTSTATUS)0xC0000081)
+#define STATUS_TOO_MANY_GUIDS_REQUESTED         ((NTSTATUS)0xC0000082)
+#define STATUS_GUIDS_EXHAUSTED                  ((NTSTATUS)0xC0000083)
+#define STATUS_INVALID_ID_AUTHORITY             ((NTSTATUS)0xC0000084)
+#define STATUS_AGENTS_EXHAUSTED                 ((NTSTATUS)0xC0000085)
+#define STATUS_INVALID_VOLUME_LABEL             ((NTSTATUS)0xC0000086)
+#define STATUS_SECTION_NOT_EXTENDED             ((NTSTATUS)0xC0000087)
+#define STATUS_NOT_MAPPED_DATA                  ((NTSTATUS)0xC0000088)
+#define STATUS_RESOURCE_DATA_NOT_FOUND          ((NTSTATUS)0xC0000089)
+#define STATUS_RESOURCE_TYPE_NOT_FOUND          ((NTSTATUS)0xC000008A)
+#define STATUS_RESOURCE_NAME_NOT_FOUND          ((NTSTATUS)0xC000008B)
+#define STATUS_TOO_MANY_PAGING_FILES            ((NTSTATUS)0xC0000097)
+#define STATUS_FILE_INVALID                     ((NTSTATUS)0xC0000098)
+#define STATUS_ALLOTTED_SPACE_EXCEEDED          ((NTSTATUS)0xC0000099)
+#define STATUS_INSUFFICIENT_RESOURCES           ((NTSTATUS)0xC000009A)
+#define STATUS_DFS_EXIT_PATH_FOUND              ((NTSTATUS)0xC000009B)
+#define STATUS_DEVICE_DATA_ERROR                ((NTSTATUS)0xC000009C)
+#define STATUS_DEVICE_NOT_CONNECTED             ((NTSTATUS)0xC000009D)
+#define STATUS_DEVICE_POWER_FAILURE             ((NTSTATUS)0xC000009E)
+#define STATUS_FREE_VM_NOT_AT_BASE              ((NTSTATUS)0xC000009F)
+#define STATUS_MEMORY_NOT_ALLOCATED             ((NTSTATUS)0xC00000A0)
+#define STATUS_WORKING_SET_QUOTA                ((NTSTATUS)0xC00000A1)
+#define STATUS_MEDIA_WRITE_PROTECTED            ((NTSTATUS)0xC00000A2)
+#define STATUS_DEVICE_NOT_READY                 ((NTSTATUS)0xC00000A3)
+#define STATUS_INVALID_GROUP_ATTRIBUTES         ((NTSTATUS)0xC00000A4)
+#define STATUS_BAD_IMPERSONATION_LEVEL          ((NTSTATUS)0xC00000A5)
+#define STATUS_CANT_OPEN_ANONYMOUS              ((NTSTATUS)0xC00000A6)
+#define STATUS_BAD_VALIDATION_CLASS             ((NTSTATUS)0xC00000A7)
+#define STATUS_BAD_TOKEN_TYPE                   ((NTSTATUS)0xC00000A8)
+#define STATUS_BAD_MASTER_BOOT_RECORD           ((NTSTATUS)0xC00000A9)
+#define STATUS_INSTRUCTION_MISALIGNMENT         ((NTSTATUS)0xC00000AA)
+#define STATUS_INSTANCE_NOT_AVAILABLE           ((NTSTATUS)0xC00000AB)
+#define STATUS_PIPE_NOT_AVAILABLE               ((NTSTATUS)0xC00000AC)
+#define STATUS_INVALID_PIPE_STATE               ((NTSTATUS)0xC00000AD)
+#define STATUS_PIPE_BUSY                        ((NTSTATUS)0xC00000AE)
+#define STATUS_ILLEGAL_FUNCTION                 ((NTSTATUS)0xC00000AF)
+#define STATUS_PIPE_DISCONNECTED                ((NTSTATUS)0xC00000B0)
+#define STATUS_PIPE_CLOSING                     ((NTSTATUS)0xC00000B1)
+#define STATUS_PIPE_CONNECTED                   ((NTSTATUS)0xC00000B2)
+#define STATUS_PIPE_LISTENING                   ((NTSTATUS)0xC00000B3)
+#define STATUS_INVALID_READ_MODE                ((NTSTATUS)0xC00000B4)
+#define STATUS_IO_TIMEOUT                       ((NTSTATUS)0xC00000B5)
+#define STATUS_FILE_FORCED_CLOSED               ((NTSTATUS)0xC00000B6)
+#define STATUS_PROFILING_NOT_STARTED            ((NTSTATUS)0xC00000B7)
+#define STATUS_PROFILING_NOT_STOPPED            ((NTSTATUS)0xC00000B8)
+#define STATUS_COULD_NOT_INTERPRET              ((NTSTATUS)0xC00000B9)
+#define STATUS_FILE_IS_A_DIRECTORY              ((NTSTATUS)0xC00000BA)
+#define STATUS_NOT_SUPPORTED                    ((NTSTATUS)0xC00000BB)
+#define STATUS_REMOTE_NOT_LISTENING             ((NTSTATUS)0xC00000BC)
+#define STATUS_DUPLICATE_NAME                   ((NTSTATUS)0xC00000BD)
+#define STATUS_BAD_NETWORK_PATH                 ((NTSTATUS)0xC00000BE)
+#define STATUS_NETWORK_BUSY                     ((NTSTATUS)0xC00000BF)
+#define STATUS_DEVICE_DOES_NOT_EXIST            ((NTSTATUS)0xC00000C0)
+#define STATUS_TOO_MANY_COMMANDS                ((NTSTATUS)0xC00000C1)
+#define STATUS_ADAPTER_HARDWARE_ERROR           ((NTSTATUS)0xC00000C2)
+#define STATUS_INVALID_NETWORK_RESPONSE         ((NTSTATUS)0xC00000C3)
+#define STATUS_UNEXPECTED_NETWORK_ERROR         ((NTSTATUS)0xC00000C4)
+#define STATUS_BAD_REMOTE_ADAPTER               ((NTSTATUS)0xC00000C5)
+#define STATUS_PRINT_QUEUE_FULL                 ((NTSTATUS)0xC00000C6)
+#define STATUS_NO_SPOOL_SPACE                   ((NTSTATUS)0xC00000C7)
+#define STATUS_PRINT_CANCELLED                  ((NTSTATUS)0xC00000C8)
+#define STATUS_NETWORK_NAME_DELETED             ((NTSTATUS)0xC00000C9)
+#define STATUS_NETWORK_ACCESS_DENIED            ((NTSTATUS)0xC00000CA)
+#define STATUS_BAD_DEVICE_TYPE                  ((NTSTATUS)0xC00000CB)
+#define STATUS_BAD_NETWORK_NAME                 ((NTSTATUS)0xC00000CC)
+#define STATUS_TOO_MANY_NAMES                   ((NTSTATUS)0xC00000CD)
+#define STATUS_TOO_MANY_SESSIONS                ((NTSTATUS)0xC00000CE)
+#define STATUS_SHARING_PAUSED                   ((NTSTATUS)0xC00000CF)
+#define STATUS_REQUEST_NOT_ACCEPTED             ((NTSTATUS)0xC00000D0)
+#define STATUS_REDIRECTOR_PAUSED                ((NTSTATUS)0xC00000D1)
+#define STATUS_NET_WRITE_FAULT                  ((NTSTATUS)0xC00000D2)
+#define STATUS_PROFILING_AT_LIMIT               ((NTSTATUS)0xC00000D3)
+#define STATUS_NOT_SAME_DEVICE                  ((NTSTATUS)0xC00000D4)
+#define STATUS_FILE_RENAMED                     ((NTSTATUS)0xC00000D5)
+#define STATUS_VIRTUAL_CIRCUIT_CLOSED           ((NTSTATUS)0xC00000D6)
+#define STATUS_NO_SECURITY_ON_OBJECT            ((NTSTATUS)0xC00000D7)
+#define STATUS_CANT_WAIT                        ((NTSTATUS)0xC00000D8)
+#define STATUS_PIPE_EMPTY                       ((NTSTATUS)0xC00000D9)
+#define STATUS_CANT_ACCESS_DOMAIN_INFO          ((NTSTATUS)0xC00000DA)
+#define STATUS_CANT_TERMINATE_SELF              ((NTSTATUS)0xC00000DB)
+#define STATUS_INVALID_SERVER_STATE             ((NTSTATUS)0xC00000DC)
+#define STATUS_INVALID_DOMAIN_STATE             ((NTSTATUS)0xC00000DD)
+#define STATUS_INVALID_DOMAIN_ROLE              ((NTSTATUS)0xC00000DE)
+#define STATUS_NO_SUCH_DOMAIN                   ((NTSTATUS)0xC00000DF)
+#define STATUS_DOMAIN_EXISTS                    ((NTSTATUS)0xC00000E0)
+#define STATUS_DOMAIN_LIMIT_EXCEEDED            ((NTSTATUS)0xC00000E1)
+#define STATUS_OPLOCK_NOT_GRANTED               ((NTSTATUS)0xC00000E2)
+#define STATUS_INVALID_OPLOCK_PROTOCOL          ((NTSTATUS)0xC00000E3)
+#define STATUS_INTERNAL_DB_CORRUPTION           ((NTSTATUS)0xC00000E4)
+#define STATUS_INTERNAL_ERROR                   ((NTSTATUS)0xC00000E5)
+#define STATUS_GENERIC_NOT_MAPPED               ((NTSTATUS)0xC00000E6)
+#define STATUS_BAD_DESCRIPTOR_FORMAT            ((NTSTATUS)0xC00000E7)
+#define STATUS_INVALID_USER_BUFFER              ((NTSTATUS)0xC00000E8)
+#define STATUS_UNEXPECTED_IO_ERROR              ((NTSTATUS)0xC00000E9)
+#define STATUS_UNEXPECTED_MM_CREATE_ERR         ((NTSTATUS)0xC00000EA)
+#define STATUS_UNEXPECTED_MM_MAP_ERROR          ((NTSTATUS)0xC00000EB)
+#define STATUS_UNEXPECTED_MM_EXTEND_ERR         ((NTSTATUS)0xC00000EC)
+#define STATUS_NOT_LOGON_PROCESS                ((NTSTATUS)0xC00000ED)
+#define STATUS_LOGON_SESSION_EXISTS             ((NTSTATUS)0xC00000EE)
+#define STATUS_INVALID_PARAMETER_1              ((NTSTATUS)0xC00000EF)
+#define STATUS_INVALID_PARAMETER_2              ((NTSTATUS)0xC00000F0)
+#define STATUS_INVALID_PARAMETER_3              ((NTSTATUS)0xC00000F1)
+#define STATUS_INVALID_PARAMETER_4              ((NTSTATUS)0xC00000F2)
+#define STATUS_INVALID_PARAMETER_5              ((NTSTATUS)0xC00000F3)
+#define STATUS_INVALID_PARAMETER_6              ((NTSTATUS)0xC00000F4)
+#define STATUS_INVALID_PARAMETER_7              ((NTSTATUS)0xC00000F5)
+#define STATUS_INVALID_PARAMETER_8              ((NTSTATUS)0xC00000F6)
+#define STATUS_INVALID_PARAMETER_9              ((NTSTATUS)0xC00000F7)
+#define STATUS_INVALID_PARAMETER_10             ((NTSTATUS)0xC00000F8)
+#define STATUS_INVALID_PARAMETER_11             ((NTSTATUS)0xC00000F9)
+#define STATUS_INVALID_PARAMETER_12             ((NTSTATUS)0xC00000FA)
+#define STATUS_REDIRECTOR_NOT_STARTED           ((NTSTATUS)0xC00000FB)
+#define STATUS_REDIRECTOR_STARTED               ((NTSTATUS)0xC00000FC)
+#define STATUS_NO_SUCH_PACKAGE                  ((NTSTATUS)0xC00000FE)
+#define STATUS_BAD_FUNCTION_TABLE               ((NTSTATUS)0xC00000FF)
+#define STATUS_VARIABLE_NOT_FOUND               ((NTSTATUS)0xC0000100)
+#define STATUS_DIRECTORY_NOT_EMPTY              ((NTSTATUS)0xC0000101)
+#define STATUS_FILE_CORRUPT_ERROR               ((NTSTATUS)0xC0000102)
+#define STATUS_NOT_A_DIRECTORY                  ((NTSTATUS)0xC0000103)
+#define STATUS_BAD_LOGON_SESSION_STATE          ((NTSTATUS)0xC0000104)
+#define STATUS_LOGON_SESSION_COLLISION          ((NTSTATUS)0xC0000105)
+#define STATUS_NAME_TOO_LONG                    ((NTSTATUS)0xC0000106)
+#define STATUS_FILES_OPEN                       ((NTSTATUS)0xC0000107)
+#define STATUS_CONNECTION_IN_USE                ((NTSTATUS)0xC0000108)
+#define STATUS_MESSAGE_NOT_FOUND                ((NTSTATUS)0xC0000109)
+#define STATUS_PROCESS_IS_TERMINATING           ((NTSTATUS)0xC000010A)
+#define STATUS_INVALID_LOGON_TYPE               ((NTSTATUS)0xC000010B)
+#define STATUS_NO_GUID_TRANSLATION              ((NTSTATUS)0xC000010C)
+#define STATUS_CANNOT_IMPERSONATE               ((NTSTATUS)0xC000010D)
+#define STATUS_IMAGE_ALREADY_LOADED             ((NTSTATUS)0xC000010E)
+#define STATUS_ABIOS_NOT_PRESENT                ((NTSTATUS)0xC000010F)
+#define STATUS_ABIOS_LID_NOT_EXIST              ((NTSTATUS)0xC0000110)
+#define STATUS_ABIOS_LID_ALREADY_OWNED          ((NTSTATUS)0xC0000111)
+#define STATUS_ABIOS_NOT_LID_OWNER              ((NTSTATUS)0xC0000112)
+#define STATUS_ABIOS_INVALID_COMMAND            ((NTSTATUS)0xC0000113)
+#define STATUS_ABIOS_INVALID_LID                ((NTSTATUS)0xC0000114)
+#define STATUS_ABIOS_SELECTOR_NOT_AVAILABLE     ((NTSTATUS)0xC0000115)
+#define STATUS_ABIOS_INVALID_SELECTOR           ((NTSTATUS)0xC0000116)
+#define STATUS_NO_LDT                           ((NTSTATUS)0xC0000117)
+#define STATUS_INVALID_LDT_SIZE                 ((NTSTATUS)0xC0000118)
+#define STATUS_INVALID_LDT_OFFSET               ((NTSTATUS)0xC0000119)
+#define STATUS_INVALID_LDT_DESCRIPTOR           ((NTSTATUS)0xC000011A)
+#define STATUS_INVALID_IMAGE_NE_FORMAT          ((NTSTATUS)0xC000011B)
+#define STATUS_RXACT_INVALID_STATE              ((NTSTATUS)0xC000011C)
+#define STATUS_RXACT_COMMIT_FAILURE             ((NTSTATUS)0xC000011D)
+#define STATUS_MAPPED_FILE_SIZE_ZERO            ((NTSTATUS)0xC000011E)
+#define STATUS_TOO_MANY_OPENED_FILES            ((NTSTATUS)0xC000011F)
+#define STATUS_CANCELLED                        ((NTSTATUS)0xC0000120)
+#define STATUS_CANNOT_DELETE                    ((NTSTATUS)0xC0000121)
+#define STATUS_INVALID_COMPUTER_NAME            ((NTSTATUS)0xC0000122)
+#define STATUS_FILE_DELETED                     ((NTSTATUS)0xC0000123)
+#define STATUS_SPECIAL_ACCOUNT                  ((NTSTATUS)0xC0000124)
+#define STATUS_SPECIAL_GROUP                    ((NTSTATUS)0xC0000125)
+#define STATUS_SPECIAL_USER                     ((NTSTATUS)0xC0000126)
+#define STATUS_MEMBERS_PRIMARY_GROUP            ((NTSTATUS)0xC0000127)
+#define STATUS_FILE_CLOSED                      ((NTSTATUS)0xC0000128)
+#define STATUS_TOO_MANY_THREADS                 ((NTSTATUS)0xC0000129)
+#define STATUS_THREAD_NOT_IN_PROCESS            ((NTSTATUS)0xC000012A)
+#define STATUS_TOKEN_ALREADY_IN_USE             ((NTSTATUS)0xC000012B)
+#define STATUS_PAGEFILE_QUOTA_EXCEEDED          ((NTSTATUS)0xC000012C)
+#define STATUS_COMMITMENT_LIMIT                 ((NTSTATUS)0xC000012D)
+#define STATUS_INVALID_IMAGE_LE_FORMAT          ((NTSTATUS)0xC000012E)
+#define STATUS_INVALID_IMAGE_NOT_MZ             ((NTSTATUS)0xC000012F)
+#define STATUS_INVALID_IMAGE_PROTECT            ((NTSTATUS)0xC0000130)
+#define STATUS_INVALID_IMAGE_WIN_16             ((NTSTATUS)0xC0000131)
+#define STATUS_LOGON_SERVER_CONFLICT            ((NTSTATUS)0xC0000132)
+#define STATUS_TIME_DIFFERENCE_AT_DC            ((NTSTATUS)0xC0000133)
+#define STATUS_SYNCHRONIZATION_REQUIRED         ((NTSTATUS)0xC0000134)
+#define STATUS_OPEN_FAILED                      ((NTSTATUS)0xC0000136)
+#define STATUS_IO_PRIVILEGE_FAILED              ((NTSTATUS)0xC0000137)
+#define STATUS_LOCAL_DISCONNECT                 ((NTSTATUS)0xC000013B)
+#define STATUS_REMOTE_DISCONNECT                ((NTSTATUS)0xC000013C)
+#define STATUS_REMOTE_RESOURCES                 ((NTSTATUS)0xC000013D)
+#define STATUS_LINK_FAILED                      ((NTSTATUS)0xC000013E)
+#define STATUS_LINK_TIMEOUT                     ((NTSTATUS)0xC000013F)
+#define STATUS_INVALID_CONNECTION               ((NTSTATUS)0xC0000140)
+#define STATUS_INVALID_ADDRESS                  ((NTSTATUS)0xC0000141)
+#define STATUS_MISSING_SYSTEMFILE               ((NTSTATUS)0xC0000143)
+#define STATUS_UNHANDLED_EXCEPTION              ((NTSTATUS)0xC0000144)
+#define STATUS_APP_INIT_FAILURE                 ((NTSTATUS)0xC0000145)
+#define STATUS_PAGEFILE_CREATE_FAILED           ((NTSTATUS)0xC0000146)
+#define STATUS_NO_PAGEFILE                      ((NTSTATUS)0xC0000147)
+#define STATUS_INVALID_LEVEL                    ((NTSTATUS)0xC0000148)
+#define STATUS_WRONG_PASSWORD_CORE              ((NTSTATUS)0xC0000149)
+#define STATUS_ILLEGAL_FLOAT_CONTEXT            ((NTSTATUS)0xC000014A)
+#define STATUS_PIPE_BROKEN                      ((NTSTATUS)0xC000014B)
+#define STATUS_REGISTRY_CORRUPT                 ((NTSTATUS)0xC000014C)
+#define STATUS_REGISTRY_IO_FAILED               ((NTSTATUS)0xC000014D)
+#define STATUS_NO_EVENT_PAIR                    ((NTSTATUS)0xC000014E)
+#define STATUS_UNRECOGNIZED_VOLUME              ((NTSTATUS)0xC000014F)
+#define STATUS_SERIAL_NO_DEVICE_INITED          ((NTSTATUS)0xC0000150)
+#define STATUS_NO_SUCH_ALIAS                    ((NTSTATUS)0xC0000151)
+#define STATUS_MEMBER_NOT_IN_ALIAS              ((NTSTATUS)0xC0000152)
+#define STATUS_MEMBER_IN_ALIAS                  ((NTSTATUS)0xC0000153)
+#define STATUS_ALIAS_EXISTS                     ((NTSTATUS)0xC0000154)
+#define STATUS_LOGON_NOT_GRANTED                ((NTSTATUS)0xC0000155)
+#define STATUS_TOO_MANY_SECRETS                 ((NTSTATUS)0xC0000156)
+#define STATUS_SECRET_TOO_LONG                  ((NTSTATUS)0xC0000157)
+#define STATUS_INTERNAL_DB_ERROR                ((NTSTATUS)0xC0000158)
+#define STATUS_FULLSCREEN_MODE                  ((NTSTATUS)0xC0000159)
+#define STATUS_TOO_MANY_CONTEXT_IDS             ((NTSTATUS)0xC000015A)
+#define STATUS_NOT_REGISTRY_FILE                ((NTSTATUS)0xC000015C)
+#define STATUS_NT_CROSS_ENCRYPTION_REQUIRED     ((NTSTATUS)0xC000015D)
+#define STATUS_DOMAIN_CTRLR_CONFIG_ERROR        ((NTSTATUS)0xC000015E)
+#define STATUS_FT_MISSING_MEMBER                ((NTSTATUS)0xC000015F)
+#define STATUS_ILL_FORMED_SERVICE_ENTRY         ((NTSTATUS)0xC0000160)
+#define STATUS_ILLEGAL_CHARACTER                ((NTSTATUS)0xC0000161)
+#define STATUS_UNMAPPABLE_CHARACTER             ((NTSTATUS)0xC0000162)
+#define STATUS_UNDEFINED_CHARACTER              ((NTSTATUS)0xC0000163)
+#define STATUS_FLOPPY_VOLUME                    ((NTSTATUS)0xC0000164)
+#define STATUS_FLOPPY_ID_MARK_NOT_FOUND         ((NTSTATUS)0xC0000165)
+#define STATUS_FLOPPY_WRONG_CYLINDER            ((NTSTATUS)0xC0000166)
+#define STATUS_FLOPPY_UNKNOWN_ERROR             ((NTSTATUS)0xC0000167)
+#define STATUS_FLOPPY_BAD_REGISTERS             ((NTSTATUS)0xC0000168)
+#define STATUS_DISK_RECALIBRATE_FAILED          ((NTSTATUS)0xC0000169)
+#define STATUS_DISK_OPERATION_FAILED            ((NTSTATUS)0xC000016A)
+#define STATUS_DISK_RESET_FAILED                ((NTSTATUS)0xC000016B)
+#define STATUS_SHARED_IRQ_BUSY                  ((NTSTATUS)0xC000016C)
+#define STATUS_FT_ORPHANING                     ((NTSTATUS)0xC000016D)
+#define STATUS_BIOS_FAILED_TO_CONNECT_INTERRUPT ((NTSTATUS)0xC000016E)
+
+#define STATUS_PARTITION_FAILURE                ((NTSTATUS)0xC0000172)
+#define STATUS_INVALID_BLOCK_LENGTH             ((NTSTATUS)0xC0000173)
+#define STATUS_DEVICE_NOT_PARTITIONED           ((NTSTATUS)0xC0000174)
+#define STATUS_UNABLE_TO_LOCK_MEDIA             ((NTSTATUS)0xC0000175)
+#define STATUS_UNABLE_TO_UNLOAD_MEDIA           ((NTSTATUS)0xC0000176)
+#define STATUS_EOM_OVERFLOW                     ((NTSTATUS)0xC0000177)
+#define STATUS_NO_MEDIA                         ((NTSTATUS)0xC0000178)
+#define STATUS_NO_SUCH_MEMBER                   ((NTSTATUS)0xC000017A)
+#define STATUS_INVALID_MEMBER                   ((NTSTATUS)0xC000017B)
+#define STATUS_KEY_DELETED                      ((NTSTATUS)0xC000017C)
+#define STATUS_NO_LOG_SPACE                     ((NTSTATUS)0xC000017D)
+#define STATUS_TOO_MANY_SIDS                    ((NTSTATUS)0xC000017E)
+#define STATUS_LM_CROSS_ENCRYPTION_REQUIRED     ((NTSTATUS)0xC000017F)
+#define STATUS_KEY_HAS_CHILDREN                 ((NTSTATUS)0xC0000180)
+#define STATUS_CHILD_MUST_BE_VOLATILE           ((NTSTATUS)0xC0000181)
+#define STATUS_DEVICE_CONFIGURATION_ERROR       ((NTSTATUS)0xC0000182)
+#define STATUS_DRIVER_INTERNAL_ERROR            ((NTSTATUS)0xC0000183)
+#define STATUS_INVALID_DEVICE_STATE             ((NTSTATUS)0xC0000184)
+#define STATUS_IO_DEVICE_ERROR                  ((NTSTATUS)0xC0000185)
+#define STATUS_DEVICE_PROTOCOL_ERROR            ((NTSTATUS)0xC0000186)
+#define STATUS_BACKUP_CONTROLLER                ((NTSTATUS)0xC0000187)
+#define STATUS_LOG_FILE_FULL                    ((NTSTATUS)0xC0000188)
+#define STATUS_TOO_LATE                         ((NTSTATUS)0xC0000189)
+#define STATUS_NO_TRUST_LSA_SECRET              ((NTSTATUS)0xC000018A)
+#define STATUS_NO_TRUST_SAM_ACCOUNT             ((NTSTATUS)0xC000018B)
+#define STATUS_TRUSTED_DOMAIN_FAILURE           ((NTSTATUS)0xC000018C)
+#define STATUS_TRUSTED_RELATIONSHIP_FAILURE     ((NTSTATUS)0xC000018D)
+#define STATUS_EVENTLOG_FILE_CORRUPT            ((NTSTATUS)0xC000018E)
+#define STATUS_EVENTLOG_CANT_START              ((NTSTATUS)0xC000018F)
+#define STATUS_TRUST_FAILURE                    ((NTSTATUS)0xC0000190)
+#define STATUS_MUTANT_LIMIT_EXCEEDED            ((NTSTATUS)0xC0000191)
+#define STATUS_NETLOGON_NOT_STARTED             ((NTSTATUS)0xC0000192)
+#define STATUS_POSSIBLE_DEADLOCK                ((NTSTATUS)0xC0000194)
+#define STATUS_NETWORK_CREDENTIAL_CONFLICT      ((NTSTATUS)0xC0000195)
+#define STATUS_REMOTE_SESSION_LIMIT             ((NTSTATUS)0xC0000196)
+#define STATUS_EVENTLOG_FILE_CHANGED            ((NTSTATUS)0xC0000197)
+#define STATUS_NOLOGON_INTERDOMAIN_TRUST_ACCOUNT ((NTSTATUS)0xC0000198)
+#define STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT ((NTSTATUS)0xC0000199)
+#define STATUS_NOLOGON_SERVER_TRUST_ACCOUNT     ((NTSTATUS)0xC000019A)
+#define STATUS_DOMAIN_TRUST_INCONSISTENT        ((NTSTATUS)0xC000019B)
+#define STATUS_FS_DRIVER_REQUIRED               ((NTSTATUS)0xC000019C)
+#define STATUS_NO_USER_SESSION_KEY              ((NTSTATUS)0xC0000202)
+#define STATUS_USER_SESSION_DELETED             ((NTSTATUS)0xC0000203)
+#define STATUS_RESOURCE_LANG_NOT_FOUND          ((NTSTATUS)0xC0000204)
+#define STATUS_INSUFF_SERVER_RESOURCES          ((NTSTATUS)0xC0000205)
+#define STATUS_INVALID_BUFFER_SIZE              ((NTSTATUS)0xC0000206)
+#define STATUS_INVALID_ADDRESS_COMPONENT        ((NTSTATUS)0xC0000207)
+#define STATUS_INVALID_ADDRESS_WILDCARD         ((NTSTATUS)0xC0000208)
+#define STATUS_TOO_MANY_ADDRESSES               ((NTSTATUS)0xC0000209)
+#define STATUS_ADDRESS_ALREADY_EXISTS           ((NTSTATUS)0xC000020A)
+#define STATUS_ADDRESS_CLOSED                   ((NTSTATUS)0xC000020B)
+#define STATUS_CONNECTION_DISCONNECTED          ((NTSTATUS)0xC000020C)
+#define STATUS_CONNECTION_RESET                 ((NTSTATUS)0xC000020D)
+#define STATUS_TOO_MANY_NODES                   ((NTSTATUS)0xC000020E)
+#define STATUS_TRANSACTION_ABORTED              ((NTSTATUS)0xC000020F)
+#define STATUS_TRANSACTION_TIMED_OUT            ((NTSTATUS)0xC0000210)
+#define STATUS_TRANSACTION_NO_RELEASE           ((NTSTATUS)0xC0000211)
+#define STATUS_TRANSACTION_NO_MATCH             ((NTSTATUS)0xC0000212)
+#define STATUS_TRANSACTION_RESPONDED            ((NTSTATUS)0xC0000213)
+#define STATUS_TRANSACTION_INVALID_ID           ((NTSTATUS)0xC0000214)
+#define STATUS_TRANSACTION_INVALID_TYPE         ((NTSTATUS)0xC0000215)
+#define STATUS_NOT_SERVER_SESSION               ((NTSTATUS)0xC0000216)
+#define STATUS_NOT_CLIENT_SESSION               ((NTSTATUS)0xC0000217)
+#define STATUS_CANNOT_LOAD_REGISTRY_FILE        ((NTSTATUS)0xC0000218)
+#define STATUS_DEBUG_ATTACH_FAILED              ((NTSTATUS)0xC0000219)
+#define STATUS_SYSTEM_PROCESS_TERMINATED        ((NTSTATUS)0xC000021A)
+#define STATUS_DATA_NOT_ACCEPTED                ((NTSTATUS)0xC000021B)
+#define STATUS_NO_BROWSER_SERVERS_FOUND         ((NTSTATUS)0xC000021C)
+#define STATUS_VDM_HARD_ERROR                   ((NTSTATUS)0xC000021D)
+#define STATUS_DRIVER_CANCEL_TIMEOUT            ((NTSTATUS)0xC000021E)
+#define STATUS_REPLY_MESSAGE_MISMATCH           ((NTSTATUS)0xC000021F)
+#define STATUS_MAPPED_ALIGNMENT                 ((NTSTATUS)0xC0000220)
+#define STATUS_IMAGE_CHECKSUM_MISMATCH          ((NTSTATUS)0xC0000221)
+#define STATUS_LOST_WRITEBEHIND_DATA            ((NTSTATUS)0xC0000222)
+#define STATUS_CLIENT_SERVER_PARAMETERS_INVALID ((NTSTATUS)0xC0000223)
+#define STATUS_NOT_FOUND                        ((NTSTATUS)0xC0000225)
+#define STATUS_NOT_TINY_STREAM                  ((NTSTATUS)0xC0000226)
+#define STATUS_RECOVERY_FAILURE                 ((NTSTATUS)0xC0000227)
+#define STATUS_STACK_OVERFLOW_READ              ((NTSTATUS)0xC0000228)
+#define STATUS_FAIL_CHECK                       ((NTSTATUS)0xC0000229)
+#define STATUS_DUPLICATE_OBJECTID               ((NTSTATUS)0xC000022A)
+#define STATUS_OBJECTID_EXISTS                  ((NTSTATUS)0xC000022B)
+#define STATUS_CONVERT_TO_LARGE                 ((NTSTATUS)0xC000022C)
+#define STATUS_RETRY                            ((NTSTATUS)0xC000022D)
+#define STATUS_FOUND_OUT_OF_SCOPE               ((NTSTATUS)0xC000022E)
+#define STATUS_ALLOCATE_BUCKET                  ((NTSTATUS)0xC000022F)
+#define STATUS_PROPSET_NOT_FOUND                ((NTSTATUS)0xC0000230)
+#define STATUS_MARSHALL_OVERFLOW                ((NTSTATUS)0xC0000231)
+#define STATUS_INVALID_VARIANT                  ((NTSTATUS)0xC0000232)
+#define STATUS_DOMAIN_CONTROLLER_NOT_FOUND      ((NTSTATUS)0xC0000233)
+#define STATUS_HANDLE_NOT_CLOSABLE              ((NTSTATUS)0xC0000235)
+#define STATUS_CONNECTION_REFUSED               ((NTSTATUS)0xC0000236)
+#define STATUS_GRACEFUL_DISCONNECT              ((NTSTATUS)0xC0000237)
+#define STATUS_ADDRESS_ALREADY_ASSOCIATED       ((NTSTATUS)0xC0000238)
+#define STATUS_ADDRESS_NOT_ASSOCIATED           ((NTSTATUS)0xC0000239)
+#define STATUS_CONNECTION_INVALID               ((NTSTATUS)0xC000023A)
+#define STATUS_CONNECTION_ACTIVE                ((NTSTATUS)0xC000023B)
+#define STATUS_NETWORK_UNREACHABLE              ((NTSTATUS)0xC000023C)
+#define STATUS_HOST_UNREACHABLE                 ((NTSTATUS)0xC000023D)
+#define STATUS_PROTOCOL_UNREACHABLE             ((NTSTATUS)0xC000023E)
+#define STATUS_PORT_UNREACHABLE                 ((NTSTATUS)0xC000023F)
+#define STATUS_REQUEST_ABORTED                  ((NTSTATUS)0xC0000240)
+#define STATUS_CONNECTION_ABORTED               ((NTSTATUS)0xC0000241)
+#define STATUS_BAD_COMPRESSION_BUFFER           ((NTSTATUS)0xC0000242)
+#define STATUS_USER_MAPPED_FILE                 ((NTSTATUS)0xC0000243)
+#define STATUS_AUDIT_FAILED                     ((NTSTATUS)0xC0000244)
+#define STATUS_TIMER_RESOLUTION_NOT_SET         ((NTSTATUS)0xC0000245)
+#define STATUS_CONNECTION_COUNT_LIMIT           ((NTSTATUS)0xC0000246)
+#define STATUS_LOGIN_TIME_RESTRICTION           ((NTSTATUS)0xC0000247)
+#define STATUS_LOGIN_WKSTA_RESTRICTION          ((NTSTATUS)0xC0000248)
+#define STATUS_IMAGE_MP_UP_MISMATCH             ((NTSTATUS)0xC0000249)
+#define STATUS_INSUFFICIENT_LOGON_INFO          ((NTSTATUS)0xC0000250)
+#define STATUS_BAD_DLL_ENTRYPOINT               ((NTSTATUS)0xC0000251)
+#define STATUS_BAD_SERVICE_ENTRYPOINT           ((NTSTATUS)0xC0000252)
+#define STATUS_LPC_REPLY_LOST                   ((NTSTATUS)0xC0000253)
+#define STATUS_IP_ADDRESS_CONFLICT1             ((NTSTATUS)0xC0000254)
+#define STATUS_IP_ADDRESS_CONFLICT2             ((NTSTATUS)0xC0000255)
+#define STATUS_REGISTRY_QUOTA_LIMIT             ((NTSTATUS)0xC0000256)
+#define STATUS_PATH_NOT_COVERED                 ((NTSTATUS)0xC0000257)
+#define STATUS_NO_CALLBACK_ACTIVE               ((NTSTATUS)0xC0000258)
+#define STATUS_LICENSE_QUOTA_EXCEEDED           ((NTSTATUS)0xC0000259)
+#define STATUS_PWD_TOO_SHORT                    ((NTSTATUS)0xC000025A)
+#define STATUS_PWD_TOO_RECENT                   ((NTSTATUS)0xC000025B)
+#define STATUS_PWD_HISTORY_CONFLICT             ((NTSTATUS)0xC000025C)
+#define STATUS_PLUGPLAY_NO_DEVICE               ((NTSTATUS)0xC000025E)
+#define STATUS_UNSUPPORTED_COMPRESSION          ((NTSTATUS)0xC000025F)
+#define STATUS_INVALID_HW_PROFILE               ((NTSTATUS)0xC0000260)
+#define STATUS_INVALID_PLUGPLAY_DEVICE_PATH     ((NTSTATUS)0xC0000261)
+#define STATUS_DRIVER_ORDINAL_NOT_FOUND         ((NTSTATUS)0xC0000262)
+#define STATUS_DRIVER_ENTRYPOINT_NOT_FOUND      ((NTSTATUS)0xC0000263)
+#define STATUS_RESOURCE_NOT_OWNED               ((NTSTATUS)0xC0000264)
+#define STATUS_TOO_MANY_LINKS                   ((NTSTATUS)0xC0000265)
+#define STATUS_QUOTA_LIST_INCONSISTENT          ((NTSTATUS)0xC0000266)
+#define STATUS_FILE_IS_OFFLINE                  ((NTSTATUS)0xC0000267)
+#define STATUS_EVALUATION_EXPIRATION            ((NTSTATUS)0xC0000268)
+#define STATUS_ILLEGAL_DLL_RELOCATION           ((NTSTATUS)0xC0000269)
+#define STATUS_LICENSE_VIOLATION                ((NTSTATUS)0xC000026A)
+#define STATUS_DLL_INIT_FAILED_LOGOFF           ((NTSTATUS)0xC000026B)
+#define STATUS_DRIVER_UNABLE_TO_LOAD            ((NTSTATUS)0xC000026C)
+#define STATUS_DFS_UNAVAILABLE                  ((NTSTATUS)0xC000026D)
+#define STATUS_VOLUME_DISMOUNTED                ((NTSTATUS)0xC000026E)
+#define STATUS_WX86_INTERNAL_ERROR              ((NTSTATUS)0xC000026F)
+#define STATUS_WX86_FLOAT_STACK_CHECK           ((NTSTATUS)0xC0000270)
+#define STATUS_VALIDATE_CONTINUE                ((NTSTATUS)0xC0000271)
+#define STATUS_NO_MATCH                         ((NTSTATUS)0xC0000272)
+#define STATUS_NO_MORE_MATCHES                  ((NTSTATUS)0xC0000273)
+#define STATUS_NOT_A_REPARSE_POINT              ((NTSTATUS)0xC0000275)
+#define STATUS_IO_REPARSE_TAG_INVALID           ((NTSTATUS)0xC0000276)
+#define STATUS_IO_REPARSE_TAG_MISMATCH          ((NTSTATUS)0xC0000277)
+#define STATUS_IO_REPARSE_DATA_INVALID          ((NTSTATUS)0xC0000278)
+#define STATUS_IO_REPARSE_TAG_NOT_HANDLED       ((NTSTATUS)0xC0000279)
+#define STATUS_REPARSE_POINT_NOT_RESOLVED       ((NTSTATUS)0xC0000280)
+#define STATUS_DIRECTORY_IS_A_REPARSE_POINT     ((NTSTATUS)0xC0000281)
+#define STATUS_RANGE_LIST_CONFLICT              ((NTSTATUS)0xC0000282)
+#define STATUS_SOURCE_ELEMENT_EMPTY             ((NTSTATUS)0xC0000283)
+#define STATUS_DESTINATION_ELEMENT_FULL         ((NTSTATUS)0xC0000284)
+#define STATUS_ILLEGAL_ELEMENT_ADDRESS          ((NTSTATUS)0xC0000285)
+#define STATUS_MAGAZINE_NOT_PRESENT             ((NTSTATUS)0xC0000286)
+#define STATUS_REINITIALIZATION_NEEDED          ((NTSTATUS)0xC0000287)
+#define STATUS_ENCRYPTION_FAILED                ((NTSTATUS)0xC000028A)
+#define STATUS_DECRYPTION_FAILED                ((NTSTATUS)0xC000028B)
+#define STATUS_RANGE_NOT_FOUND                  ((NTSTATUS)0xC000028C)
+#define STATUS_NO_RECOVERY_POLICY               ((NTSTATUS)0xC000028D)
+#define STATUS_NO_EFS                           ((NTSTATUS)0xC000028E)
+#define STATUS_WRONG_EFS                        ((NTSTATUS)0xC000028F)
+#define STATUS_NO_USER_KEYS                     ((NTSTATUS)0xC0000290)
+#define STATUS_FILE_NOT_ENCRYPTED               ((NTSTATUS)0xC0000291)
+#define STATUS_NOT_EXPORT_FORMAT                ((NTSTATUS)0xC0000292)
+#define STATUS_FILE_ENCRYPTED                   ((NTSTATUS)0xC0000293)
+#define STATUS_WMI_GUID_NOT_FOUND               ((NTSTATUS)0xC0000295)
+#define STATUS_WMI_INSTANCE_NOT_FOUND           ((NTSTATUS)0xC0000296)
+#define STATUS_WMI_ITEMID_NOT_FOUND             ((NTSTATUS)0xC0000297)
+#define STATUS_WMI_TRY_AGAIN                    ((NTSTATUS)0xC0000298)
+#define STATUS_SHARED_POLICY                    ((NTSTATUS)0xC0000299)
+#define STATUS_POLICY_OBJECT_NOT_FOUND          ((NTSTATUS)0xC000029A)
+#define STATUS_POLICY_ONLY_IN_DS                ((NTSTATUS)0xC000029B)
+#define STATUS_VOLUME_NOT_UPGRADED              ((NTSTATUS)0xC000029C)
+#define STATUS_REMOTE_STORAGE_NOT_ACTIVE        ((NTSTATUS)0xC000029D)
+#define STATUS_REMOTE_STORAGE_MEDIA_ERROR       ((NTSTATUS)0xC000029E)
+#define STATUS_NO_TRACKING_SERVICE              ((NTSTATUS)0xC000029F)
+#define STATUS_SERVER_SID_MISMATCH              ((NTSTATUS)0xC00002A0)
+#define STATUS_DS_NO_ATTRIBUTE_OR_VALUE         ((NTSTATUS)0xC00002A1)
+#define STATUS_DS_INVALID_ATTRIBUTE_SYNTAX      ((NTSTATUS)0xC00002A2)
+#define STATUS_DS_ATTRIBUTE_TYPE_UNDEFINED      ((NTSTATUS)0xC00002A3)
+#define STATUS_DS_ATTRIBUTE_OR_VALUE_EXISTS     ((NTSTATUS)0xC00002A4)
+#define STATUS_DS_BUSY                          ((NTSTATUS)0xC00002A5)
+#define STATUS_DS_UNAVAILABLE                   ((NTSTATUS)0xC00002A6)
+#define STATUS_DS_NO_RIDS_ALLOCATED             ((NTSTATUS)0xC00002A7)
+#define STATUS_DS_NO_MORE_RIDS                  ((NTSTATUS)0xC00002A8)
+#define STATUS_DS_INCORRECT_ROLE_OWNER          ((NTSTATUS)0xC00002A9)
+#define STATUS_DS_RIDMGR_INIT_ERROR             ((NTSTATUS)0xC00002AA)
+#define STATUS_DS_OBJ_CLASS_VIOLATION           ((NTSTATUS)0xC00002AB)
+#define STATUS_DS_CANT_ON_NON_LEAF              ((NTSTATUS)0xC00002AC)
+#define STATUS_DS_CANT_ON_RDN                   ((NTSTATUS)0xC00002AD)
+#define STATUS_DS_CANT_MOD_OBJ_CLASS            ((NTSTATUS)0xC00002AE)
+#define STATUS_DS_CROSS_DOM_MOVE_FAILED         ((NTSTATUS)0xC00002AF)
+#define STATUS_DS_GC_NOT_AVAILABLE              ((NTSTATUS)0xC00002B0)
+#define STATUS_DIRECTORY_SERVICE_REQUIRED       ((NTSTATUS)0xC00002B1)
+#define STATUS_REPARSE_ATTRIBUTE_CONFLICT       ((NTSTATUS)0xC00002B2)
+#define STATUS_CANT_ENABLE_DENY_ONLY            ((NTSTATUS)0xC00002B3)
+#define STATUS_DEVICE_REMOVED                   ((NTSTATUS)0xC00002B6)
+#define STATUS_JOURNAL_DELETE_IN_PROGRESS       ((NTSTATUS)0xC00002B7)
+#define STATUS_JOURNAL_NOT_ACTIVE               ((NTSTATUS)0xC00002B8)
+#define STATUS_NOINTERFACE                      ((NTSTATUS)0xC00002B9)
+#define STATUS_DS_ADMIN_LIMIT_EXCEEDED          ((NTSTATUS)0xC00002C1)
+#define STATUS_DRIVER_FAILED_SLEEP              ((NTSTATUS)0xC00002C2)
+#define STATUS_MUTUAL_AUTHENTICATION_FAILED     ((NTSTATUS)0xC00002C3)
+#define STATUS_CORRUPT_SYSTEM_FILE              ((NTSTATUS)0xC00002C4)
+#define STATUS_DATATYPE_MISALIGNMENT_ERROR      ((NTSTATUS)0xC00002C5)
+#define STATUS_WMI_READ_ONLY                    ((NTSTATUS)0xC00002C6)
+#define STATUS_WMI_SET_FAILURE                  ((NTSTATUS)0xC00002C7)
+#define STATUS_COMMITMENT_MINIMUM               ((NTSTATUS)0xC00002C8)
+#define STATUS_TRANSPORT_FULL                   ((NTSTATUS)0xC00002CA)
+#define STATUS_DS_SAM_INIT_FAILURE              ((NTSTATUS)0xC00002CB)
+#define STATUS_ONLY_IF_CONNECTED                ((NTSTATUS)0xC00002CC)
+#define STATUS_DS_SENSITIVE_GROUP_VIOLATION     ((NTSTATUS)0xC00002CD)
+#define STATUS_PNP_RESTART_ENUMERATION          ((NTSTATUS)0xC00002CE)
+#define STATUS_JOURNAL_ENTRY_DELETED            ((NTSTATUS)0xC00002CF)
+#define STATUS_DS_CANT_MOD_PRIMARYGROUPID       ((NTSTATUS)0xC00002D0)
+#define STATUS_SYSTEM_IMAGE_BAD_SIGNATURE       ((NTSTATUS)0xC00002D1)
+#define STATUS_PNP_REBOOT_REQUIRED              ((NTSTATUS)0xC00002D2)
+#define STATUS_POWER_STATE_INVALID              ((NTSTATUS)0xC00002D3)
+#define STATUS_DS_INVALID_GROUP_TYPE                            ((NTSTATUS)0xC00002D4)
+#define STATUS_DS_NO_NEST_GLOBALGROUP_IN_MIXEDDOMAIN            ((NTSTATUS)0xC00002D5)
+#define STATUS_DS_NO_NEST_LOCALGROUP_IN_MIXEDDOMAIN             ((NTSTATUS)0xC00002D6)
+#define STATUS_DS_GLOBAL_CANT_HAVE_LOCAL_MEMBER                 ((NTSTATUS)0xC00002D7)
+#define STATUS_DS_GLOBAL_CANT_HAVE_UNIVERSAL_MEMBER             ((NTSTATUS)0xC00002D8)
+#define STATUS_DS_UNIVERSAL_CANT_HAVE_LOCAL_MEMBER              ((NTSTATUS)0xC00002D9)
+#define STATUS_DS_GLOBAL_CANT_HAVE_CROSSDOMAIN_MEMBER           ((NTSTATUS)0xC00002DA)
+#define STATUS_DS_LOCAL_CANT_HAVE_CROSSDOMAIN_LOCAL_MEMBER      ((NTSTATUS)0xC00002DB)
+#define STATUS_DS_HAVE_PRIMARY_MEMBERS                          ((NTSTATUS)0xC00002DC)
+#define STATUS_WMI_NOT_SUPPORTED                        ((NTSTATUS)0xC00002DD)
+#define STATUS_INSUFFICIENT_POWER                       ((NTSTATUS)0xC00002DE)
+#define STATUS_SAM_NEED_BOOTKEY_PASSWORD                ((NTSTATUS)0xC00002DF)
+#define STATUS_SAM_NEED_BOOTKEY_FLOPPY                  ((NTSTATUS)0xC00002E0)
+#define STATUS_DS_CANT_START                            ((NTSTATUS)0xC00002E1)
+#define STATUS_DS_INIT_FAILURE                          ((NTSTATUS)0xC00002E2)
+#define STATUS_SAM_INIT_FAILURE                         ((NTSTATUS)0xC00002E3)
+#define STATUS_DS_GC_REQUIRED                           ((NTSTATUS)0xC00002E4)
+#define STATUS_DS_LOCAL_MEMBER_OF_LOCAL_ONLY            ((NTSTATUS)0xC00002E5)
+#define STATUS_DS_NO_FPO_IN_UNIVERSAL_GROUPS            ((NTSTATUS)0xC00002E6)
+#define STATUS_DS_MACHINE_ACCOUNT_QUOTA_EXCEEDED        ((NTSTATUS)0xC00002E7)
+#define STATUS_MULTIPLE_FAULT_VIOLATION         ((NTSTATUS)0xC00002E8)
+#define STATUS_CURRENT_DOMAIN_NOT_ALLOWED       ((NTSTATUS)0xC00002E9)
+#define STATUS_CANNOT_MAKE                      ((NTSTATUS)0xC00002EA)
+#define STATUS_SYSTEM_SHUTDOWN                  ((NTSTATUS)0xC00002EB)
+#define STATUS_DS_INIT_FAILURE_CONSOLE          ((NTSTATUS)0xC00002EC)
+#define STATUS_DS_SAM_INIT_FAILURE_CONSOLE      ((NTSTATUS)0xC00002ED)
+#define STATUS_UNFINISHED_CONTEXT_DELETED       ((NTSTATUS)0xC00002EE)
+#define STATUS_NO_TGT_REPLY                     ((NTSTATUS)0xC00002EF)
+#define STATUS_OBJECTID_NOT_FOUND               ((NTSTATUS)0xC00002F0)
+#define STATUS_NO_IP_ADDRESSES                  ((NTSTATUS)0xC00002F1)
+#define STATUS_WRONG_CREDENTIAL_HANDLE          ((NTSTATUS)0xC00002F2)
+#define STATUS_CRYPTO_SYSTEM_INVALID            ((NTSTATUS)0xC00002F3)
+#define STATUS_MAX_REFERRALS_EXCEEDED           ((NTSTATUS)0xC00002F4)
+#define STATUS_MUST_BE_KDC                      ((NTSTATUS)0xC00002F5)
+#define STATUS_STRONG_CRYPTO_NOT_SUPPORTED      ((NTSTATUS)0xC00002F6)
+#define STATUS_TOO_MANY_PRINCIPALS              ((NTSTATUS)0xC00002F7)
+#define STATUS_NO_PA_DATA                       ((NTSTATUS)0xC00002F8)
+#define STATUS_PKINIT_NAME_MISMATCH             ((NTSTATUS)0xC00002F9)
+#define STATUS_SMARTCARD_LOGON_REQUIRED         ((NTSTATUS)0xC00002FA)
+#define STATUS_KDC_INVALID_REQUEST              ((NTSTATUS)0xC00002FB)
+#define STATUS_KDC_UNABLE_TO_REFER              ((NTSTATUS)0xC00002FC)
+#define STATUS_KDC_UNKNOWN_ETYPE                ((NTSTATUS)0xC00002FD)
+#define STATUS_SHUTDOWN_IN_PROGRESS             ((NTSTATUS)0xC00002FE)
+#define STATUS_SERVER_SHUTDOWN_IN_PROGRESS      ((NTSTATUS)0xC00002FF)
+#define STATUS_NOT_SUPPORTED_ON_SBS             ((NTSTATUS)0xC0000300)
+#define STATUS_WMI_GUID_DISCONNECTED            ((NTSTATUS)0xC0000301)
+#define STATUS_WMI_ALREADY_DISABLED             ((NTSTATUS)0xC0000302)
+#define STATUS_WMI_ALREADY_ENABLED              ((NTSTATUS)0xC0000303)
+#define STATUS_MFT_TOO_FRAGMENTED               ((NTSTATUS)0xC0000304)
+#define STATUS_COPY_PROTECTION_FAILURE          ((NTSTATUS)0xC0000305)
+#define STATUS_CSS_AUTHENTICATION_FAILURE       ((NTSTATUS)0xC0000306)
+#define STATUS_CSS_KEY_NOT_PRESENT              ((NTSTATUS)0xC0000307)
+#define STATUS_CSS_KEY_NOT_ESTABLISHED          ((NTSTATUS)0xC0000308)
+#define STATUS_CSS_SCRAMBLED_SECTOR             ((NTSTATUS)0xC0000309)
+#define STATUS_CSS_REGION_MISMATCH              ((NTSTATUS)0xC000030A)
+#define STATUS_CSS_RESETS_EXHAUSTED             ((NTSTATUS)0xC000030B)
+#define STATUS_PKINIT_FAILURE                   ((NTSTATUS)0xC0000320)
+#define STATUS_SMARTCARD_SUBSYSTEM_FAILURE      ((NTSTATUS)0xC0000321)
+#define STATUS_NO_KERB_KEY                      ((NTSTATUS)0xC0000322)
+#define STATUS_HOST_DOWN                        ((NTSTATUS)0xC0000350)
+#define STATUS_UNSUPPORTED_PREAUTH              ((NTSTATUS)0xC0000351)
+#define STATUS_EFS_ALG_BLOB_TOO_BIG             ((NTSTATUS)0xC0000352)
+#define STATUS_PORT_NOT_SET                     ((NTSTATUS)0xC0000353)
+#define STATUS_DEBUGGER_INACTIVE                ((NTSTATUS)0xC0000354)
+#define STATUS_DS_VERSION_CHECK_FAILURE         ((NTSTATUS)0xC0000355)
+#define STATUS_AUDITING_DISABLED                ((NTSTATUS)0xC0000356)
+#define STATUS_PRENT4_MACHINE_ACCOUNT           ((NTSTATUS)0xC0000357)
+#define STATUS_DS_AG_CANT_HAVE_UNIVERSAL_MEMBER ((NTSTATUS)0xC0000358)
+#define STATUS_INVALID_IMAGE_WIN_32             ((NTSTATUS)0xC0000359)
+#define STATUS_INVALID_IMAGE_WIN_64             ((NTSTATUS)0xC000035A)
+#define STATUS_BAD_BINDINGS                     ((NTSTATUS)0xC000035B)
+#define STATUS_NETWORK_SESSION_EXPIRED          ((NTSTATUS)0xC000035C)
+#define STATUS_APPHELP_BLOCK                    ((NTSTATUS)0xC000035D)
+#define STATUS_ALL_SIDS_FILTERED                ((NTSTATUS)0xC000035E)
+#define STATUS_NOT_SAFE_MODE_DRIVER             ((NTSTATUS)0xC000035F)
+#define STATUS_ACCESS_DISABLED_BY_POLICY_DEFAULT        ((NTSTATUS)0xC0000361)
+#define STATUS_ACCESS_DISABLED_BY_POLICY_PATH           ((NTSTATUS)0xC0000362)
+#define STATUS_ACCESS_DISABLED_BY_POLICY_PUBLISHER      ((NTSTATUS)0xC0000363)
+#define STATUS_ACCESS_DISABLED_BY_POLICY_OTHER          ((NTSTATUS)0xC0000364)
+#define STATUS_FAILED_DRIVER_ENTRY              ((NTSTATUS)0xC0000365)
+#define STATUS_DEVICE_ENUMERATION_ERROR         ((NTSTATUS)0xC0000366)
+#define STATUS_WAIT_FOR_OPLOCK                  ((NTSTATUS)0x00000367)
+#define STATUS_MOUNT_POINT_NOT_RESOLVED         ((NTSTATUS)0xC0000368)
+#define STATUS_INVALID_DEVICE_OBJECT_PARAMETER  ((NTSTATUS)0xC0000369)
+#define STATUS_MCA_OCCURED                      ((NTSTATUS)0xC000036A)
+#define STATUS_DRIVER_BLOCKED_CRITICAL          ((NTSTATUS)0xC000036B)
+#define STATUS_DRIVER_BLOCKED                   ((NTSTATUS)0xC000036C)
+#define STATUS_DRIVER_DATABASE_ERROR            ((NTSTATUS)0xC000036D)
+#define STATUS_SYSTEM_HIVE_TOO_LARGE            ((NTSTATUS)0xC000036E)
+#define STATUS_INVALID_IMPORT_OF_NON_DLL        ((NTSTATUS)0xC000036F)
+#define STATUS_SMARTCARD_WRONG_PIN              ((NTSTATUS)0xC0000380)
+#define STATUS_SMARTCARD_CARD_BLOCKED           ((NTSTATUS)0xC0000381)
+#define STATUS_SMARTCARD_CARD_NOT_AUTHENTICATED ((NTSTATUS)0xC0000382)
+#define STATUS_SMARTCARD_NO_CARD                ((NTSTATUS)0xC0000383)
+#define STATUS_SMARTCARD_NO_KEY_CONTAINER       ((NTSTATUS)0xC0000384)
+#define STATUS_SMARTCARD_NO_CERTIFICATE         ((NTSTATUS)0xC0000385)
+#define STATUS_SMARTCARD_NO_KEYSET              ((NTSTATUS)0xC0000386)
+#define STATUS_SMARTCARD_IO_ERROR               ((NTSTATUS)0xC0000387)
+#define STATUS_SMARTCARD_CERT_REVOKED           ((NTSTATUS)0xC0000389)
+#define STATUS_ISSUING_CA_UNTRUSTED             ((NTSTATUS)0xC000038A)
+#define STATUS_REVOCATION_OFFLINE_C             ((NTSTATUS)0xC000038B)
+#define STATUS_PKINIT_CLIENT_FAILURE            ((NTSTATUS)0xC000038C)
+#define STATUS_SMARTCARD_CERT_EXPIRED           ((NTSTATUS)0xC000038D)
+#define STATUS_DRIVER_FAILED_PRIOR_UNLOAD       ((NTSTATUS)0xC000038E)
+#define STATUS_SMARTCARD_SILENT_CONTEXT         ((NTSTATUS)0xC000038F)
+#define STATUS_PER_USER_TRUST_QUOTA_EXCEEDED    ((NTSTATUS)0xC0000401)
+#define STATUS_ALL_USER_TRUST_QUOTA_EXCEEDED    ((NTSTATUS)0xC0000402)
+#define STATUS_USER_DELETE_TRUST_QUOTA_EXCEEDED ((NTSTATUS)0xC0000403)
+#define STATUS_DS_NAME_NOT_UNIQUE               ((NTSTATUS)0xC0000404)
+#define STATUS_DS_DUPLICATE_ID_FOUND            ((NTSTATUS)0xC0000405)
+#define STATUS_DS_GROUP_CONVERSION_ERROR        ((NTSTATUS)0xC0000406)
+#define STATUS_VOLSNAP_PREPARE_HIBERNATE        ((NTSTATUS)0xC0000407)
+#define STATUS_USER2USER_REQUIRED               ((NTSTATUS)0xC0000408)
+#define STATUS_NO_S4U_PROT_SUPPORT              ((NTSTATUS)0xC000040A)
+#define STATUS_CROSSREALM_DELEGATION_FAILURE    ((NTSTATUS)0xC000040B)
+#define STATUS_REVOCATION_OFFLINE_KDC           ((NTSTATUS)0xC000040C)
+#define STATUS_ISSUING_CA_UNTRUSTED_KDC         ((NTSTATUS)0xC000040D)
+#define STATUS_KDC_CERT_EXPIRED                 ((NTSTATUS)0xC000040E)
+#define STATUS_KDC_CERT_REVOKED                 ((NTSTATUS)0xC000040F)
+#define STATUS_PARAMETER_QUOTA_EXCEEDED         ((NTSTATUS)0xC0000410)
+#define STATUS_HIBERNATION_FAILURE              ((NTSTATUS)0xC0000411)
+#define STATUS_DELAY_LOAD_FAILED                ((NTSTATUS)0xC0000412)
+#define STATUS_VDM_DISALLOWED                   ((NTSTATUS)0xC0000414)
+#define STATUS_HUNG_DISPLAY_DRIVER_THREAD       ((NTSTATUS)0xC0000415)
+#define STATUS_CALLBACK_POP_STACK               ((NTSTATUS)0xC0000423)
+#define STATUS_HIVE_UNLOADED                    ((NTSTATUS)0xC0000425)
+#define STATUS_ELEVATION_REQUIRED               ((NTSTATUS)0xC000042C)
+#define STATUS_PURGE_FAILED                     ((NTSTATUS)0xC0000435)
+#ifndef STATUS_ALREADY_REGISTERED
+#define STATUS_ALREADY_REGISTERED               ((NTSTATUS)0xC0000718)
+#endif
+#define STATUS_WOW_ASSERTION                    ((NTSTATUS)0xC0009898)
+#define STATUS_INVALID_SIGNATURE                ((NTSTATUS)0xC000A000)
+#define STATUS_HMAC_NOT_SUPPORTED               ((NTSTATUS)0xC000A001)
+#define STATUS_IPSEC_QUEUE_OVERFLOW             ((NTSTATUS)0xC000A010)
+#define STATUS_ND_QUEUE_OVERFLOW                ((NTSTATUS)0xC000A011)
+#define STATUS_HOPLIMIT_EXCEEDED                ((NTSTATUS)0xC000A012)
+#define STATUS_PROTOCOL_NOT_SUPPORTED           ((NTSTATUS)0xC000A013)
+
+#define RPC_NT_INVALID_STRING_BINDING    ((NTSTATUS)0xC0020001)
+#define RPC_NT_WRONG_KIND_OF_BINDING     ((NTSTATUS)0xC0020002)
+#define RPC_NT_INVALID_BINDING           ((NTSTATUS)0xC0020003)
+#define RPC_NT_PROTSEQ_NOT_SUPPORTED     ((NTSTATUS)0xC0020004)
+#define RPC_NT_INVALID_RPC_PROTSEQ       ((NTSTATUS)0xC0020005)
+#define RPC_NT_INVALID_STRING_UUID       ((NTSTATUS)0xC0020006)
+#define RPC_NT_INVALID_ENDPOINT_FORMAT   ((NTSTATUS)0xC0020007)
+#define RPC_NT_INVALID_NET_ADDR          ((NTSTATUS)0xC0020008)
+#define RPC_NT_NO_ENDPOINT_FOUND         ((NTSTATUS)0xC0020009)
+#define RPC_NT_INVALID_TIMEOUT           ((NTSTATUS)0xC002000A)
+#define RPC_NT_OBJECT_NOT_FOUND          ((NTSTATUS)0xC002000B)
+#define RPC_NT_ALREADY_REGISTERED        ((NTSTATUS)0xC002000C)
+#define RPC_NT_TYPE_ALREADY_REGISTERED   ((NTSTATUS)0xC002000D)
+#define RPC_NT_ALREADY_LISTENING         ((NTSTATUS)0xC002000E)
+#define RPC_NT_NO_PROTSEQS_REGISTERED    ((NTSTATUS)0xC002000F)
+#define RPC_NT_NOT_LISTENING             ((NTSTATUS)0xC0020010)
+#define RPC_NT_UNKNOWN_MGR_TYPE          ((NTSTATUS)0xC0020011)
+#define RPC_NT_UNKNOWN_IF                ((NTSTATUS)0xC0020012)
+#define RPC_NT_NO_BINDINGS               ((NTSTATUS)0xC0020013)
+#define RPC_NT_NO_PROTSEQS               ((NTSTATUS)0xC0020014)
+#define RPC_NT_CANT_CREATE_ENDPOINT      ((NTSTATUS)0xC0020015)
+#define RPC_NT_OUT_OF_RESOURCES          ((NTSTATUS)0xC0020016)
+#define RPC_NT_SERVER_UNAVAILABLE        ((NTSTATUS)0xC0020017)
+#define RPC_NT_SERVER_TOO_BUSY           ((NTSTATUS)0xC0020018)
+#define RPC_NT_INVALID_NETWORK_OPTIONS   ((NTSTATUS)0xC0020019)
+#define RPC_NT_NO_CALL_ACTIVE            ((NTSTATUS)0xC002001A)
+#define RPC_NT_CALL_FAILED               ((NTSTATUS)0xC002001B)
+#define RPC_NT_CALL_FAILED_DNE           ((NTSTATUS)0xC002001C)
+#define RPC_NT_PROTOCOL_ERROR            ((NTSTATUS)0xC002001D)
+#define RPC_NT_UNSUPPORTED_TRANS_SYN     ((NTSTATUS)0xC002001F)
+#define RPC_NT_UNSUPPORTED_TYPE          ((NTSTATUS)0xC0020021)
+#define RPC_NT_INVALID_TAG               ((NTSTATUS)0xC0020022)
+#define RPC_NT_INVALID_BOUND             ((NTSTATUS)0xC0020023)
+#define RPC_NT_NO_ENTRY_NAME             ((NTSTATUS)0xC0020024)
+#define RPC_NT_INVALID_NAME_SYNTAX       ((NTSTATUS)0xC0020025)
+#define RPC_NT_UNSUPPORTED_NAME_SYNTAX   ((NTSTATUS)0xC0020026)
+#define RPC_NT_UUID_NO_ADDRESS           ((NTSTATUS)0xC0020028)
+#define RPC_NT_DUPLICATE_ENDPOINT        ((NTSTATUS)0xC0020029)
+#define RPC_NT_UNKNOWN_AUTHN_TYPE        ((NTSTATUS)0xC002002A)
+#define RPC_NT_MAX_CALLS_TOO_SMALL       ((NTSTATUS)0xC002002B)
+#define RPC_NT_STRING_TOO_LONG           ((NTSTATUS)0xC002002C)
+#define RPC_NT_PROTSEQ_NOT_FOUND         ((NTSTATUS)0xC002002D)
+#define RPC_NT_PROCNUM_OUT_OF_RANGE      ((NTSTATUS)0xC002002E)
+#define RPC_NT_BINDING_HAS_NO_AUTH       ((NTSTATUS)0xC002002F)
+#define RPC_NT_UNKNOWN_AUTHN_SERVICE     ((NTSTATUS)0xC0020030)
+#define RPC_NT_UNKNOWN_AUTHN_LEVEL       ((NTSTATUS)0xC0020031)
+#define RPC_NT_INVALID_AUTH_IDENTITY     ((NTSTATUS)0xC0020032)
+#define RPC_NT_UNKNOWN_AUTHZ_SERVICE     ((NTSTATUS)0xC0020033)
+#define EPT_NT_INVALID_ENTRY             ((NTSTATUS)0xC0020034)
+#define EPT_NT_CANT_PERFORM_OP           ((NTSTATUS)0xC0020035)
+#define EPT_NT_NOT_REGISTERED            ((NTSTATUS)0xC0020036)
+#define RPC_NT_NOTHING_TO_EXPORT         ((NTSTATUS)0xC0020037)
+#define RPC_NT_INCOMPLETE_NAME           ((NTSTATUS)0xC0020038)
+#define RPC_NT_INVALID_VERS_OPTION       ((NTSTATUS)0xC0020039)
+#define RPC_NT_NO_MORE_MEMBERS           ((NTSTATUS)0xC002003A)
+#define RPC_NT_NOT_ALL_OBJS_UNEXPORTED   ((NTSTATUS)0xC002003B)
+#define RPC_NT_INTERFACE_NOT_FOUND       ((NTSTATUS)0xC002003C)
+#define RPC_NT_ENTRY_ALREADY_EXISTS      ((NTSTATUS)0xC002003D)
+#define RPC_NT_ENTRY_NOT_FOUND           ((NTSTATUS)0xC002003E)
+#define RPC_NT_NAME_SERVICE_UNAVAILABLE  ((NTSTATUS)0xC002003F)
+#define RPC_NT_INVALID_NAF_ID            ((NTSTATUS)0xC0020040)
+#define RPC_NT_CANNOT_SUPPORT            ((NTSTATUS)0xC0020041)
+#define RPC_NT_NO_CONTEXT_AVAILABLE      ((NTSTATUS)0xC0020042)
+#define RPC_NT_INTERNAL_ERROR            ((NTSTATUS)0xC0020043)
+#define RPC_NT_ZERO_DIVIDE               ((NTSTATUS)0xC0020044)
+#define RPC_NT_ADDRESS_ERROR             ((NTSTATUS)0xC0020045)
+#define RPC_NT_FP_DIV_ZERO               ((NTSTATUS)0xC0020046)
+#define RPC_NT_FP_UNDERFLOW              ((NTSTATUS)0xC0020047)
+#define RPC_NT_FP_OVERFLOW               ((NTSTATUS)0xC0020048)
+#define RPC_NT_CALL_IN_PROGRESS          ((NTSTATUS)0xC0020049)
+#define RPC_NT_NO_MORE_BINDINGS          ((NTSTATUS)0xC002004A)
+#define RPC_NT_GROUP_MEMBER_NOT_FOUND    ((NTSTATUS)0xC002004B)
+#define EPT_NT_CANT_CREATE               ((NTSTATUS)0xC002004C)
+#define RPC_NT_INVALID_OBJECT            ((NTSTATUS)0xC002004D)
+#define RPC_NT_NO_INTERFACES             ((NTSTATUS)0xC002004F)
+#define RPC_NT_CALL_CANCELLED            ((NTSTATUS)0xC0020050)
+#define RPC_NT_BINDING_INCOMPLETE        ((NTSTATUS)0xC0020051)
+#define RPC_NT_COMM_FAILURE              ((NTSTATUS)0xC0020052)
+#define RPC_NT_UNSUPPORTED_AUTHN_LEVEL   ((NTSTATUS)0xC0020053)
+#define RPC_NT_NO_PRINC_NAME             ((NTSTATUS)0xC0020054)
+#define RPC_NT_NOT_RPC_ERROR             ((NTSTATUS)0xC0020055)
+#define RPC_NT_SEC_PKG_ERROR             ((NTSTATUS)0xC0020057)
+#define RPC_NT_NOT_CANCELLED             ((NTSTATUS)0xC0020058)
+#define RPC_NT_INVALID_ASYNC_HANDLE      ((NTSTATUS)0xC0020062)
+#define RPC_NT_INVALID_ASYNC_CALL        ((NTSTATUS)0xC0020063)
+
+#define RPC_NT_NO_MORE_ENTRIES           ((NTSTATUS)0xC0030001)
+#define RPC_NT_SS_CHAR_TRANS_OPEN_FAIL   ((NTSTATUS)0xC0030002)
+#define RPC_NT_SS_CHAR_TRANS_SHORT_FILE  ((NTSTATUS)0xC0030003)
+#define RPC_NT_SS_IN_NULL_CONTEXT        ((NTSTATUS)0xC0030004)
+#define RPC_NT_SS_CONTEXT_MISMATCH       ((NTSTATUS)0xC0030005)
+#define RPC_NT_SS_CONTEXT_DAMAGED        ((NTSTATUS)0xC0030006)
+#define RPC_NT_SS_HANDLES_MISMATCH       ((NTSTATUS)0xC0030007)
+#define RPC_NT_SS_CANNOT_GET_CALL_HANDLE ((NTSTATUS)0xC0030008)
+#define RPC_NT_NULL_REF_POINTER          ((NTSTATUS)0xC0030009)
+#define RPC_NT_ENUM_VALUE_OUT_OF_RANGE   ((NTSTATUS)0xC003000A)
+#define RPC_NT_BYTE_COUNT_TOO_SMALL      ((NTSTATUS)0xC003000B)
+#define RPC_NT_BAD_STUB_DATA             ((NTSTATUS)0xC003000C)
+#define RPC_NT_INVALID_ES_ACTION         ((NTSTATUS)0xC0030059)
+#define RPC_NT_WRONG_ES_VERSION          ((NTSTATUS)0xC003005A)
+#define RPC_NT_WRONG_STUB_VERSION        ((NTSTATUS)0xC003005B)
+#define RPC_NT_INVALID_PIPE_OBJECT       ((NTSTATUS)0xC003005C)
+#define RPC_NT_INVALID_PIPE_OPERATION    ((NTSTATUS)0xC003005D)
+#define RPC_NT_WRONG_PIPE_VERSION        ((NTSTATUS)0xC003005E)
+#define RPC_NT_PIPE_CLOSED               ((NTSTATUS)0xC003005F)
+#define RPC_NT_PIPE_DISCIPLINE_ERROR     ((NTSTATUS)0xC0030060)
+#define RPC_NT_PIPE_EMPTY                ((NTSTATUS)0xC0030061)
+
+#define STATUS_PNP_BAD_MPS_TABLE          ((NTSTATUS)0xC0040035)
+#define STATUS_PNP_TRANSLATION_FAILED     ((NTSTATUS)0xC0040036)
+#define STATUS_PNP_IRQ_TRANSLATION_FAILED ((NTSTATUS)0xC0040037)
+#define STATUS_PNP_INVALID_ID             ((NTSTATUS)0xC0040038)
+
+#define STATUS_ACPI_INVALID_OPCODE              ((NTSTATUS)0xC0140001L)
+#define STATUS_ACPI_STACK_OVERFLOW              ((NTSTATUS)0xC0140002L)
+#define STATUS_ACPI_ASSERT_FAILED               ((NTSTATUS)0xC0140003L)
+#define STATUS_ACPI_INVALID_INDEX               ((NTSTATUS)0xC0140004L)
+#define STATUS_ACPI_INVALID_ARGUMENT            ((NTSTATUS)0xC0140005L)
+#define STATUS_ACPI_FATAL                       ((NTSTATUS)0xC0140006L)
+#define STATUS_ACPI_INVALID_SUPERNAME           ((NTSTATUS)0xC0140007L)
+#define STATUS_ACPI_INVALID_ARGTYPE             ((NTSTATUS)0xC0140008L)
+#define STATUS_ACPI_INVALID_OBJTYPE             ((NTSTATUS)0xC0140009L)
+#define STATUS_ACPI_INVALID_TARGETTYPE          ((NTSTATUS)0xC014000AL)
+#define STATUS_ACPI_INCORRECT_ARGUMENT_COUNT    ((NTSTATUS)0xC014000BL)
+#define STATUS_ACPI_ADDRESS_NOT_MAPPED          ((NTSTATUS)0xC014000CL)
+#define STATUS_ACPI_INVALID_EVENTTYPE           ((NTSTATUS)0xC014000DL)
+#define STATUS_ACPI_HANDLER_COLLISION           ((NTSTATUS)0xC014000EL)
+#define STATUS_ACPI_INVALID_DATA                ((NTSTATUS)0xC014000FL)
+#define STATUS_ACPI_INVALID_REGION              ((NTSTATUS)0xC0140010L)
+#define STATUS_ACPI_INVALID_ACCESS_SIZE         ((NTSTATUS)0xC0140011L)
+#define STATUS_ACPI_ACQUIRE_GLOBAL_LOCK         ((NTSTATUS)0xC0140012L)
+#define STATUS_ACPI_ALREADY_INITIALIZED         ((NTSTATUS)0xC0140013L)
+#define STATUS_ACPI_NOT_INITIALIZED             ((NTSTATUS)0xC0140014L)
+#define STATUS_ACPI_INVALID_MUTEX_LEVEL         ((NTSTATUS)0xC0140015L)
+#define STATUS_ACPI_MUTEX_NOT_OWNED             ((NTSTATUS)0xC0140016L)
+#define STATUS_ACPI_MUTEX_NOT_OWNER             ((NTSTATUS)0xC0140017L)
+#define STATUS_ACPI_RS_ACCESS                   ((NTSTATUS)0xC0140018L)
+#define STATUS_ACPI_INVALID_TABLE               ((NTSTATUS)0xC0140019L)
+#define STATUS_ACPI_REG_HANDLER_FAILED          ((NTSTATUS)0xC0140020L)
+#define STATUS_ACPI_POWER_REQUEST_FAILED        ((NTSTATUS)0xC0140021L)
+
+#define STATUS_CTX_WINSTATION_NAME_INVALID      ((NTSTATUS)0xC00A0001)
+#define STATUS_CTX_INVALID_PD                   ((NTSTATUS)0xC00A0002)
+#define STATUS_CTX_PD_NOT_FOUND                 ((NTSTATUS)0xC00A0003)
+#define STATUS_CTX_CLOSE_PENDING                ((NTSTATUS)0xC00A0006)
+#define STATUS_CTX_NO_OUTBUF                    ((NTSTATUS)0xC00A0007)
+#define STATUS_CTX_MODEM_INF_NOT_FOUND          ((NTSTATUS)0xC00A0008)
+#define STATUS_CTX_INVALID_MODEMNAME            ((NTSTATUS)0xC00A0009)
+#define STATUS_CTX_RESPONSE_ERROR               ((NTSTATUS)0xC00A000A)
+#define STATUS_CTX_MODEM_RESPONSE_TIMEOUT       ((NTSTATUS)0xC00A000B)
+#define STATUS_CTX_MODEM_RESPONSE_NO_CARRIER    ((NTSTATUS)0xC00A000C)
+#define STATUS_CTX_MODEM_RESPONSE_NO_DIALTONE   ((NTSTATUS)0xC00A000D)
+#define STATUS_CTX_MODEM_RESPONSE_BUSY          ((NTSTATUS)0xC00A000E)
+#define STATUS_CTX_MODEM_RESPONSE_VOICE         ((NTSTATUS)0xC00A000F)
+#define STATUS_CTX_TD_ERROR                     ((NTSTATUS)0xC00A0010)
+#define STATUS_CTX_LICENSE_CLIENT_INVALID       ((NTSTATUS)0xC00A0012)
+#define STATUS_CTX_LICENSE_NOT_AVAILABLE        ((NTSTATUS)0xC00A0013)
+#define STATUS_CTX_LICENSE_EXPIRED              ((NTSTATUS)0xC00A0014)
+#define STATUS_CTX_WINSTATION_NOT_FOUND         ((NTSTATUS)0xC00A0015)
+#define STATUS_CTX_WINSTATION_NAME_COLLISION    ((NTSTATUS)0xC00A0016)
+#define STATUS_CTX_WINSTATION_BUSY              ((NTSTATUS)0xC00A0017)
+#define STATUS_CTX_BAD_VIDEO_MODE               ((NTSTATUS)0xC00A0018)
+#define STATUS_CTX_GRAPHICS_INVALID             ((NTSTATUS)0xC00A0022)
+#define STATUS_CTX_NOT_CONSOLE                  ((NTSTATUS)0xC00A0024)
+#define STATUS_CTX_CLIENT_QUERY_TIMEOUT         ((NTSTATUS)0xC00A0026)
+#define STATUS_CTX_CONSOLE_DISCONNECT           ((NTSTATUS)0xC00A0027)
+#define STATUS_CTX_CONSOLE_CONNECT              ((NTSTATUS)0xC00A0028)
+#define STATUS_CTX_SHADOW_DENIED                ((NTSTATUS)0xC00A002A)
+#define STATUS_CTX_WINSTATION_ACCESS_DENIED     ((NTSTATUS)0xC00A002B)
+#define STATUS_CTX_INVALID_WD                   ((NTSTATUS)0xC00A002E)
+#define STATUS_CTX_WD_NOT_FOUND                 ((NTSTATUS)0xC00A002F)
+#define STATUS_CTX_SHADOW_INVALID               ((NTSTATUS)0xC00A0030)
+#define STATUS_CTX_SHADOW_DISABLED              ((NTSTATUS)0xC00A0031)
+#define STATUS_RDP_PROTOCOL_ERROR               ((NTSTATUS)0xC00A0032)
+#define STATUS_CTX_CLIENT_LICENSE_NOT_SET       ((NTSTATUS)0xC00A0033)
+#define STATUS_CTX_CLIENT_LICENSE_IN_USE        ((NTSTATUS)0xC00A0034)
+#define STATUS_CTX_SHADOW_ENDED_BY_MODE_CHANGE  ((NTSTATUS)0xC00A0035)
+#define STATUS_CTX_SHADOW_NOT_RUNNING           ((NTSTATUS)0xC00A0036)
+
+#define STATUS_CLUSTER_INVALID_NODE             ((NTSTATUS)0xC0130001)
+#define STATUS_CLUSTER_NODE_EXISTS              ((NTSTATUS)0xC0130002)
+#define STATUS_CLUSTER_JOIN_IN_PROGRESS         ((NTSTATUS)0xC0130003)
+#define STATUS_CLUSTER_NODE_NOT_FOUND           ((NTSTATUS)0xC0130004)
+#define STATUS_CLUSTER_LOCAL_NODE_NOT_FOUND     ((NTSTATUS)0xC0130005)
+#define STATUS_CLUSTER_NETWORK_EXISTS           ((NTSTATUS)0xC0130006)
+#define STATUS_CLUSTER_NETWORK_NOT_FOUND        ((NTSTATUS)0xC0130007)
+#define STATUS_CLUSTER_NETINTERFACE_EXISTS      ((NTSTATUS)0xC0130008)
+#define STATUS_CLUSTER_NETINTERFACE_NOT_FOUND   ((NTSTATUS)0xC0130009)
+#define STATUS_CLUSTER_INVALID_REQUEST          ((NTSTATUS)0xC013000A)
+#define STATUS_CLUSTER_INVALID_NETWORK_PROVIDER ((NTSTATUS)0xC013000B)
+#define STATUS_CLUSTER_NODE_DOWN                ((NTSTATUS)0xC013000C)
+#define STATUS_CLUSTER_NODE_UNREACHABLE         ((NTSTATUS)0xC013000D)
+#define STATUS_CLUSTER_NODE_NOT_MEMBER          ((NTSTATUS)0xC013000E)
+#define STATUS_CLUSTER_JOIN_NOT_IN_PROGRESS     ((NTSTATUS)0xC013000F)
+#define STATUS_CLUSTER_INVALID_NETWORK          ((NTSTATUS)0xC0130010)
+#define STATUS_CLUSTER_NO_NET_ADAPTERS          ((NTSTATUS)0xC0130011)
+#define STATUS_CLUSTER_NODE_UP                  ((NTSTATUS)0xC0130012)
+#define STATUS_CLUSTER_NODE_PAUSED              ((NTSTATUS)0xC0130013)
+#define STATUS_CLUSTER_NODE_NOT_PAUSED          ((NTSTATUS)0xC0130014)
+#define STATUS_CLUSTER_NO_SECURITY_CONTEXT      ((NTSTATUS)0xC0130015)
+#define STATUS_CLUSTER_NETWORK_NOT_INTERNAL     ((NTSTATUS)0xC0130016)
+#define STATUS_CLUSTER_POISONED                 ((NTSTATUS)0xC0130017)
+
+#define STATUS_SXS_SECTION_NOT_FOUND            ((NTSTATUS)0xC0150001)
+#define STATUS_SXS_CANT_GEN_ACTCTX              ((NTSTATUS)0xC0150002)
+#define STATUS_SXS_INVALID_ACTCTXDATA_FORMAT    ((NTSTATUS)0xC0150003)
+#define STATUS_SXS_ASSEMBLY_NOT_FOUND           ((NTSTATUS)0xC0150004)
+#define STATUS_SXS_MANIFEST_FORMAT_ERROR        ((NTSTATUS)0xC0150005)
+#define STATUS_SXS_MANIFEST_PARSE_ERROR         ((NTSTATUS)0xC0150006)
+#define STATUS_SXS_ACTIVATION_CONTEXT_DISABLED  ((NTSTATUS)0xC0150007)
+#define STATUS_SXS_KEY_NOT_FOUND                ((NTSTATUS)0xC0150008)
+#define STATUS_SXS_VERSION_CONFLICT             ((NTSTATUS)0xC0150009)
+#define STATUS_SXS_WRONG_SECTION_TYPE           ((NTSTATUS)0xC015000A)
+#define STATUS_SXS_THREAD_QUERIES_DISABLED      ((NTSTATUS)0xC015000B)
+#define STATUS_SXS_ASSEMBLY_MISSING             ((NTSTATUS)0xC015000C)
+#define STATUS_SXS_PROCESS_DEFAULT_ALREADY_SET  ((NTSTATUS)0xC015000E)
+#define STATUS_SXS_MULTIPLE_DEACTIVATION        ((NTSTATUS)0xC0150011)
+#define STATUS_SXS_SYSTEM_DEFAULT_ACTIVATION_CONTEXT_EMPTY ((NTSTATUS)0xC0150012)
+#define STATUS_SXS_PROCESS_TERMINATION_REQUESTED ((NTSTATUS)0xC0150013)
+#define STATUS_SXS_CORRUPT_ACTIVATION_STACK ((NTSTATUS)0xC0150014)
+#define STATUS_SXS_CORRUPTION                   ((NTSTATUS)0xC0150015)
+#define STATUS_SXS_INVALID_IDENTITY_ATTRIBUTE_VALUE  ((NTSTATUS) 0xC0150016)
+#define STATUS_SXS_INVALID_IDENTITY_ATTRIBUTE_NAME   ((NTSTATUS) 0xC0150017)
+#define STATUS_SXS_IDENTITY_DUPLICATE_ATTRIBUTE      ((NTSTATUS) 0xC0150018)
+#define STATUS_SXS_IDENTITY_PARSE_ERROR              ((NTSTATUS) 0xC0150019)
+#define STATUS_SXS_COMPONENT_STORE_CORRUPT           ((NTSTATUS) 0xC015001A)
+#define STATUS_SXS_FILE_HASH_MISMATCH                ((NTSTATUS) 0xC015001B)
+#define STATUS_SXS_MANIFEST_IDENTITY_SAME_BUT_CONTENTS_DIFFERENT    ((NTSTATUS) 0xC015001C)
+#define STATUS_SXS_IDENTITIES_DIFFERENT              ((NTSTATUS) 0xC015001D)
+#define STATUS_SXS_ASSEMBLY_IS_NOT_A_DEPLOYMENT      ((NTSTATUS) 0xC015001E)
+#define STATUS_SXS_FILE_NOT_PART_OF_ASSEMBLY         ((NTSTATUS) 0xC015001F)
+#define STATUS_ADVANCED_INSTALLER_FAILED             ((NTSTATUS) 0xC0150020)
+#define STATUS_XML_ENCODING_MISMATCH                 ((NTSTATUS) 0xC0150021)
+#define STATUS_SXS_MANIFEST_TOO_BIG                  ((NTSTATUS) 0xC0150022)
+#define STATUS_SXS_SETTING_NOT_REGISTERED            ((NTSTATUS) 0xC0150023)
+#define STATUS_SXS_TRANSACTION_CLOSURE_INCOMPLETE    ((NTSTATUS) 0xC0150024)
+#define STATUS_SMI_PRIMITIVE_INSTALLER_FAILED        ((NTSTATUS) 0xC0150025)
+#define STATUS_GENERIC_COMMAND_FAILED                ((NTSTATUS) 0xC0150026)
+#define STATUS_SXS_FILE_HASH_MISSING                 ((NTSTATUS) 0xC0150027)
+
+#define STATUS_FLT_NO_HANDLER_DEFINED           ((NTSTATUS)0xC01C0001L)
+#define STATUS_FLT_CONTEXT_ALREADY_DEFINED      ((NTSTATUS)0xC01C0002L)
+#define STATUS_FLT_INVALID_ASYNCHRONOUS_REQUEST ((NTSTATUS)0xC01C0003L)
+#define STATUS_FLT_DISALLOW_FAST_IO             ((NTSTATUS)0xC01C0004L)
+#define STATUS_FLT_INVALID_NAME_REQUEST         ((NTSTATUS)0xC01C0005L)
+#define STATUS_FLT_NOT_SAFE_TO_POST_OPERATION   ((NTSTATUS)0xC01C0006L)
+#define STATUS_FLT_NOT_INITIALIZED              ((NTSTATUS)0xC01C0007L)
+#define STATUS_FLT_FILTER_NOT_READY             ((NTSTATUS)0xC01C0008L)
+#define STATUS_FLT_POST_OPERATION_CLEANUP       ((NTSTATUS)0xC01C0009L)
+#define STATUS_FLT_INTERNAL_ERROR               ((NTSTATUS)0xC01C000AL)
+#define STATUS_FLT_DELETING_OBJECT              ((NTSTATUS)0xC01C000BL)
+#define STATUS_FLT_MUST_BE_NONPAGED_POOL        ((NTSTATUS)0xC01C000CL)
+#define STATUS_FLT_DUPLICATE_ENTRY              ((NTSTATUS)0xC01C000DL)
+#define STATUS_FLT_CBDQ_DISABLED                ((NTSTATUS)0xC01C000EL)
+#define STATUS_FLT_DO_NOT_ATTACH                ((NTSTATUS)0xC01C000FL)
+#define STATUS_FLT_DO_NOT_DETACH                ((NTSTATUS)0xC01C0010L)
+#define STATUS_FLT_INSTANCE_ALTITUDE_COLLISION  ((NTSTATUS)0xC01C0011L)
+#define STATUS_FLT_INSTANCE_NAME_COLLISION      ((NTSTATUS)0xC01C0012L)
+#define STATUS_FLT_FILTER_NOT_FOUND             ((NTSTATUS)0xC01C0013L)
+#define STATUS_FLT_VOLUME_NOT_FOUND             ((NTSTATUS)0xC01C0014L)
+#define STATUS_FLT_INSTANCE_NOT_FOUND           ((NTSTATUS)0xC01C0015L)
+#define STATUS_FLT_CONTEXT_ALLOCATION_NOT_FOUND ((NTSTATUS)0xC01C0016L)
+#define STATUS_FLT_INVALID_CONTEXT_REGISTRATION ((NTSTATUS)0xC01C0017L)
+#define STATUS_FLT_NAME_CACHE_MISS              ((NTSTATUS)0xC01C0018L)
+#define STATUS_FLT_NO_DEVICE_OBJECT             ((NTSTATUS)0xC01C0019L)
+#define STATUS_FLT_VOLUME_ALREADY_MOUNTED       ((NTSTATUS)0xC01C001AL)
+#define STATUS_FLT_ALREADY_ENLISTED             ((NTSTATUS)0xC01C001BL)
+#define STATUS_FLT_CONTEXT_ALREADY_LINKED       ((NTSTATUS)0xC01C001CL)
+#define STATUS_FLT_NO_WAITER_FOR_REPLY          ((NTSTATUS)0xC01C0020L)
+#define STATUS_FLT_REGISTRATION_BUSY            ((NTSTATUS)0xC01C0023L)
+
+#ifndef ASSERT
+#ifdef _DEBUG
+#define ASSERT(x) assert(x)
+#else
+#define ASSERT(x) /* x */
+#endif
+#endif
+
+#ifndef DEVICE_TYPE
+#define DEVICE_TYPE DWORD
+#endif
+
+	//-----------------------------------------------------------------------------
+	// Definition of intervals for waiting functions
+
+#define ABSOLUTE_INTERVAL(wait) (wait)
+
+#define RELATIVE_INTERVAL(wait) (-(wait))
+
+#define NANOSECONDS(nanos) \
+(((signed __int64)(nanos)) / 100L)
+
+#define MICROSECONDS(micros) \
+(((signed __int64)(micros)) * NANOSECONDS(1000L))
+
+#define MILISECONDS(mili) \
+(((signed __int64)(mili)) * MICROSECONDS(1000L))
+
+#define SECONDS(seconds) \
+(((signed __int64)(seconds)) * MILISECONDS(1000L))
+
+	//------------------------------------------------------------------------------
+	// Structures
+
+#ifndef _NTDEF_
+
+	typedef struct _TIME_FIELDS {
+		USHORT Year;        // range [1601...]
+		USHORT Month;       // range [1..12]
+		USHORT Day;         // range [1..31]
+		USHORT Hour;        // range [0..23]
+		USHORT Minute;      // range [0..59]
+		USHORT Second;      // range [0..59]
+		USHORT Milliseconds;// range [0..999]
+		USHORT Weekday;     // range [0..6] == [Sunday..Saturday]
+	} TIME_FIELDS;
+	typedef TIME_FIELDS* PTIME_FIELDS;
+
+	typedef enum _EVENT_TYPE
+	{
+		NotificationEvent,
+		SynchronizationEvent
+
+	} EVENT_TYPE;
+
+	//
+	// ANSI strings are counted 8-bit character strings. If they are
+	// NULL terminated, Length does not include trailing NULL.
+	//
+
+#ifndef _STRING
+	typedef struct _STRING
+	{
+		USHORT Length;
+		USHORT MaximumLength;
+		PCHAR  Buffer;
+
+	} STRING, * PSTRING;
+#endif
+
+	//
+	// Unicode strings are counted 16-bit character strings. If they are
+	// NULL terminated, Length does not include trailing NULL.
+	//
+#ifndef _UNICODE_STRING
+	typedef struct _UNICODE_STRING
+	{
+		USHORT Length;
+		USHORT MaximumLength;
+		PWSTR  Buffer;
+
+	} UNICODE_STRING, * PUNICODE_STRING;
+#endif
+
+	typedef STRING ANSI_STRING;
+	typedef PSTRING PANSI_STRING;
+
+	typedef STRING OEM_STRING;
+	typedef PSTRING POEM_STRING;
+	typedef CONST STRING* PCOEM_STRING;
+
+	typedef const UNICODE_STRING* PCUNICODE_STRING;
+
+#define UNICODE_NULL ((WCHAR)0) // winnt
+
+	//
+	// Valid values for the Attributes field
+	//
+
+#define OBJ_INHERIT             0x00000002L
+#define OBJ_PERMANENT           0x00000010L
+#define OBJ_EXCLUSIVE           0x00000020L
+#define OBJ_CASE_INSENSITIVE    0x00000040L
+#define OBJ_OPENIF              0x00000080L
+#define OBJ_OPENLINK            0x00000100L
+#define OBJ_KERNEL_HANDLE       0x00000200L
+#define OBJ_FORCE_ACCESS_CHECK  0x00000400L
+#define OBJ_VALID_ATTRIBUTES    0x000007F2L
+
+	//
+	// Object Attributes structure
+	//
+
+	typedef struct _OBJECT_ATTRIBUTES
+	{
+		ULONG Length;
+		HANDLE RootDirectory;
+		PUNICODE_STRING ObjectName;
+		ULONG Attributes;
+		PVOID SecurityDescriptor;        // Points to type SECURITY_DESCRIPTOR
+		PVOID SecurityQualityOfService;  // Points to type SECURITY_QUALITY_OF_SERVICE
+
+	} OBJECT_ATTRIBUTES, * POBJECT_ATTRIBUTES;
+
+	//
+	// IO_STATUS_BLOCK
+	//
+
+	typedef struct _IO_STATUS_BLOCK
+	{
+		union
+		{
+			NTSTATUS Status;
+			PVOID Pointer;
+		};
+
+		ULONG_PTR Information;
+
+	} IO_STATUS_BLOCK, * PIO_STATUS_BLOCK;
+
+	//
+	// ClientId
+	//
+
+	typedef struct _CLIENT_ID
+	{
+		HANDLE UniqueProcess;
+		HANDLE UniqueThread;
+
+	} CLIENT_ID, * PCLIENT_ID;
+#endif // _NTDEF_
+
+
+	//
+	// CURDIR structure
+	//
+
+	typedef struct _CURDIR
+	{
+		UNICODE_STRING DosPath;
+		HANDLE Handle;
+
+	} CURDIR, * PCURDIR;
+
+
+	//------------------------------------------------------------------------------
+	// Macros
+
+#ifndef InitializeObjectAttributes
+#define InitializeObjectAttributes( p, n, a, r, s ) {   \
+	(p)->Length = sizeof( OBJECT_ATTRIBUTES );          \
+	(p)->RootDirectory = r;                             \
+	(p)->Attributes = a;                                \
+	(p)->ObjectName = n;                                \
+	(p)->SecurityDescriptor = s;                        \
+	(p)->SecurityQualityOfService = NULL;               \
+		}
+#endif
+
+	//
+	// Macros for handling LIST_ENTRY-based lists
+	//
+
+#if !defined(_WDMDDK_) && !defined(_LIST_ENTRY_MACROS_DEFINED_)
+#define _LIST_ENTRY_MACROS_DEFINED_
+
+	BOOLEAN
+		FORCEINLINE
+		IsListEmpty(
+			IN const LIST_ENTRY* ListHead
+		)
+	{
+		return (BOOLEAN)(ListHead->Flink == ListHead);
+	}
+
+	FORCEINLINE
+		VOID
+		InitializeListHead(
+			IN PLIST_ENTRY ListHead
+		)
+	{
+		ListHead->Flink = ListHead->Blink = ListHead;
+	}
+
+	FORCEINLINE
+		VOID
+		InsertHeadList(
+			IN OUT PLIST_ENTRY ListHead,
+			IN OUT PLIST_ENTRY Entry
+		)
+	{
+		PLIST_ENTRY Flink;
+
+		Flink = ListHead->Flink;
+		Entry->Flink = Flink;
+		Entry->Blink = ListHead;
+		Flink->Blink = Entry;
+		ListHead->Flink = Entry;
+	}
+
+	FORCEINLINE
+		VOID
+		InsertTailList(
+			IN OUT PLIST_ENTRY ListHead,
+			IN OUT PLIST_ENTRY Entry
+		)
+	{
+		PLIST_ENTRY Blink;
+
+		Blink = ListHead->Blink;
+		Entry->Flink = ListHead;
+		Entry->Blink = Blink;
+		Blink->Flink = Entry;
+		ListHead->Blink = Entry;
+	}
+
+	FORCEINLINE
+		BOOLEAN
+		RemoveEntryList(
+			IN PLIST_ENTRY Entry
+		)
+	{
+		PLIST_ENTRY Blink;
+		PLIST_ENTRY Flink;
+
+		Flink = Entry->Flink;
+		Blink = Entry->Blink;
+		Blink->Flink = Flink;
+		Flink->Blink = Blink;
+		return (BOOLEAN)(Flink == Blink);
+	}
+#endif  // #if !defined(_WDMDDK_) && !defined(_LIST_ENTRY_MACROS_DEFINED_)
+
+	//-----------------------------------------------------------------------------
+	// Unicode string functions
+
+	NTSYSAPI
+		VOID
+		NTAPI
+		RtlInitString(
+			PSTRING DestinationString,
+			PCSTR SourceString
+		);
+
+	NTSYSAPI HANDLE NTAPI CsrGetProcessId(VOID);
+
+	NTSYSAPI
+		VOID
+		NTAPI
+		RtlInitUnicodeString(
+			PUNICODE_STRING DestinationString,
+			PCWSTR SourceString
+		);
+
+
+	NTSYSAPI
+		BOOLEAN
+		NTAPI
+		RtlCreateUnicodeString(
+			OUT PUNICODE_STRING DestinationString,
+			IN PCWSTR SourceString
+		);
+
+
+	NTSYSAPI
+		BOOLEAN
+		NTAPI
+		RtlCreateUnicodeStringFromAsciiz(
+			OUT PUNICODE_STRING Destination,
+			IN PCSTR Source
+		);
+
+
+	NTSYSAPI
+		VOID
+		NTAPI
+		RtlTimeToTimeFields(
+			IN PLARGE_INTEGER Time,
+			OUT PTIME_FIELDS TimeFields);
+
+	NTSYSAPI
+		VOID
+		NTAPI
+		RtlAcquirePebLock(VOID);
+
+
+	NTSYSAPI
+		VOID
+		NTAPI
+		RtlReleasePebLock(VOID);
+
+
+	NTSYSAPI
+		BOOLEAN
+		NTAPI
+		RtlPrefixUnicodeString(
+			IN PUNICODE_STRING String1,
+			IN PUNICODE_STRING String2,
+			IN BOOLEAN CaseInSensitive
+		);
+
+	NTSYSAPI VOID NTAPI RtlZeroMemory(
+		_Out_ VOID UNALIGNED* Destination,
+		_In_  SIZE_T         Length
+	);
+
+	NTSYSAPI VOID NTAPI RtlMoveMemory(
+		_Out_		VOID UNALIGNED* Destination,
+		_In_  const VOID UNALIGNED* Source,
+		_In_        SIZE_T			Length
+	);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlDuplicateUnicodeString(
+			IN  BOOLEAN AllocateNew,
+			IN  PUNICODE_STRING SourceString,
+			OUT PUNICODE_STRING TargetString
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlAppendUnicodeToString(
+			PUNICODE_STRING Destination,
+			PCWSTR Source
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlAppendUnicodeStringToString(
+			IN OUT PUNICODE_STRING Destination,
+			IN PUNICODE_STRING Source
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlUnicodeStringToInteger(
+			IN PUNICODE_STRING String,
+			IN ULONG Base OPTIONAL,
+			OUT PULONG Value
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlIntegerToUnicodeString(
+			IN ULONG Value,
+			IN ULONG Base OPTIONAL,
+			IN OUT PUNICODE_STRING String
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlGUIDFromString(
+			IN PUNICODE_STRING GuidString,
+			OUT GUID* Guid
+		);
+
+
+	NTSYSAPI
+		LONG
+		NTAPI
+		RtlCompareUnicodeString(
+			IN PUNICODE_STRING String1,
+			IN PUNICODE_STRING String2,
+			IN BOOLEAN CaseInSensitive
+		);
+
+
+	NTSYSAPI
+		VOID
+		NTAPI
+		RtlCopyUnicodeString(
+			OUT PUNICODE_STRING DestinationString,
+			IN PUNICODE_STRING SourceString
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlUpcaseUnicodeString(
+			OUT PUNICODE_STRING DestinationString,
+			IN PUNICODE_STRING SourceString,
+			IN BOOLEAN AllocateDestinationString
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlDowncaseUnicodeString(
+			OUT PUNICODE_STRING DestinationString,
+			IN PUNICODE_STRING SourceString,
+			IN BOOLEAN AllocateDestinationString
+		);
+
+
+	NTSYSAPI
+		BOOLEAN
+		NTAPI
+		RtlEqualUnicodeString(
+			IN PUNICODE_STRING String1,
+			IN PUNICODE_STRING String2,
+			IN BOOLEAN CaseInSensitive
+		);
+
+
+	NTSYSAPI
+		VOID
+		NTAPI
+		RtlFreeUnicodeString(
+			IN  PUNICODE_STRING UnicodeString
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlAnsiStringToUnicodeString(
+			OUT PUNICODE_STRING DestinationString,
+			IN PANSI_STRING SourceString,
+			IN BOOLEAN AllocateDestinationString
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlUnicodeStringToAnsiString(
+			OUT PANSI_STRING DestinationString,
+			IN PUNICODE_STRING SourceString,
+			IN BOOLEAN AllocateDestinationString
+		);
+
+
+	NTSYSAPI
+		VOID
+		NTAPI
+		RtlInitAnsiString(
+			OUT PANSI_STRING DestinationString,
+			IN PCHAR SourceString
+		);
+
+
+	NTSYSAPI
+		VOID
+		NTAPI
+		RtlFreeAnsiString(
+			IN PANSI_STRING AnsiString
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlFormatCurrentUserKeyPath(
+			OUT PUNICODE_STRING CurrentUserKeyPath
+		);
+
+
+	NTSYSAPI
+		VOID
+		NTAPI
+		RtlRaiseStatus(
+			IN NTSTATUS Status
+		);
+
+
+	NTSYSAPI
+		VOID
+		NTAPI
+		DbgBreakPoint(
+			VOID
+		);
+
+
+	NTSYSAPI
+		ULONG
+		_cdecl
+		DbgPrint(
+			PCH Format,
+			...
+		);
+
+
+	NTSYSAPI
+		ULONG
+		NTAPI
+		RtlRandom(
+			IN OUT PULONG Seed
+		);
+
+	NTSYSAPI
+		PVOID
+		NTAPI
+		RtlEncodePointer(
+			IN PVOID 	Pointer
+		);
+
+
+	NTSYSAPI
+		PVOID
+		NTAPI
+		RtlDecodePointer(
+			IN PVOID 	Pointer
+		);
+
+	//-----------------------------------------------------------------------------
+	// Critical section functions
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlInitializeCriticalSection(
+			IN  PRTL_CRITICAL_SECTION CriticalSection
+		);
+
+
+	NTSYSAPI
+		BOOL
+		NTAPI
+		RtlTryEnterCriticalSection(
+			IN PRTL_CRITICAL_SECTION CriticalSection
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlEnterCriticalSection(
+			IN PRTL_CRITICAL_SECTION CriticalSection
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlLeaveCriticalSection(
+			IN PRTL_CRITICAL_SECTION CriticalSection
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlDeleteCriticalSection(
+			IN  PRTL_CRITICAL_SECTION CriticalSection
+		);
+
+	NTSYSAPI NTSTATUS NTAPI RtlConvertSidToUnicodeString(
+		PUNICODE_STRING UnicodeString,
+		PSID            Sid,
+		BOOLEAN         AllocateDestinationString
+	);
+
+	//-----------------------------------------------------------------------------
+	// Compression and decompression
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlCompressBuffer(
+			IN  USHORT CompressionFormatAndEngine,
+			IN  PUCHAR UncompressedBuffer,
+			IN  ULONG UncompressedBufferSize,
+			OUT PUCHAR CompressedBuffer,
+			IN  ULONG CompressedBufferSize,
+			IN  ULONG UncompressedChunkSize,
+			OUT PULONG FinalCompressedSize,
+			IN  PVOID WorkSpace
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlDecompressBuffer(
+			IN  USHORT CompressionFormat,
+			OUT PUCHAR UncompressedBuffer,
+			IN  ULONG UncompressedBufferSize,
+			IN  PUCHAR CompressedBuffer,
+			IN  ULONG CompressedBufferSize,
+			OUT PULONG FinalUncompressedSize
+		);
+
+	//-----------------------------------------------------------------------------
+	// Object functions
+
+	//
+	// Object Manager Directory Specific Access Rights.
+	//
+
+#ifndef DIRECTORY_QUERY
+#define DIRECTORY_QUERY                 (0x0001)
+#define DIRECTORY_TRAVERSE              (0x0002)
+#define DIRECTORY_CREATE_OBJECT         (0x0004)
+#define DIRECTORY_CREATE_SUBDIRECTORY   (0x0008)
+#define DIRECTORY_ALL_ACCESS (STANDARD_RIGHTS_REQUIRED | 0xF)
+#endif
+
+	typedef struct _RTLP_CURDIR_REF
+	{
+		LONG RefCount;
+		HANDLE Handle;
+	} RTLP_CURDIR_REF, * PRTLP_CURDIR_REF;
+
+	typedef struct _RTL_RELATIVE_NAME_U
+	{
+		UNICODE_STRING RelativeName;
+		HANDLE ContainingDirectory;
+		PRTLP_CURDIR_REF CurDirRef;
+	} RTL_RELATIVE_NAME_U, * PRTL_RELATIVE_NAME_U;
+
+	typedef struct _RTL_DRIVE_LETTER_CURDIR
+	{
+		USHORT Flags;
+		USHORT Length;
+		ULONG TimeStamp;
+		UNICODE_STRING DosPath;
+	} RTL_DRIVE_LETTER_CURDIR, * PRTL_DRIVE_LETTER_CURDIR;
+
+	typedef struct _RTL_PERTHREAD_CURDIR
+	{
+		PRTL_DRIVE_LETTER_CURDIR CurrentDirectories;
+		PUNICODE_STRING ImageName;
+		PVOID Environment;
+	} RTL_PERTHREAD_CURDIR, * PRTL_PERTHREAD_CURDIR;
+
+	typedef struct _RTL_ACQUIRE_STATE
+	{
+		HANDLE Token;
+		HANDLE OldImpersonationToken;
+		PTOKEN_PRIVILEGES OldPrivileges;
+		PTOKEN_PRIVILEGES NewPrivileges;
+		ULONG Flags;
+		UCHAR OldPrivBuffer[1024];
+	} RTL_ACQUIRE_STATE, * PRTL_ACQUIRE_STATE;
+
+	typedef struct _RTL_VECTORED_HANDLER_LIST
+	{
+		SRWLOCK ExceptionLock;
+		LIST_ENTRY ExceptionList;
+		SRWLOCK ContinueLock;
+		LIST_ENTRY ContinueList;
+	} RTL_VECTORED_HANDLER_LIST, * PRTL_VECTORED_HANDLER_LIST;
+
+	typedef struct _RTL_VECTORED_EXCEPTION_ENTRY
+	{
+		LIST_ENTRY List;
+		PULONG_PTR Flag;
+		ULONG RefCount;
+		PVECTORED_EXCEPTION_HANDLER VectoredHandler;
+	} RTL_VECTORED_EXCEPTION_ENTRY, * PRTL_VECTORED_EXCEPTION_ENTRY;
+
+	typedef VOID(NTAPI* RTL_VERIFIER_DLL_LOAD_CALLBACK) (PWSTR DllName, PVOID DllBase, SIZE_T DllSize, PVOID Reserved);
+	typedef VOID(NTAPI* RTL_VERIFIER_DLL_UNLOAD_CALLBACK) (PWSTR DllName, PVOID DllBase, SIZE_T DllSize, PVOID Reserved);
+	typedef VOID(NTAPI* RTL_VERIFIER_NTDLLHEAPFREE_CALLBACK) (PVOID AllocationBase, SIZE_T AllocationSize);
+
+	typedef struct _RTL_VERIFIER_THUNK_DESCRIPTOR
+	{
+		PCHAR ThunkName;
+		PVOID ThunkOldAddress;
+		PVOID ThunkNewAddress;
+	} RTL_VERIFIER_THUNK_DESCRIPTOR, * PRTL_VERIFIER_THUNK_DESCRIPTOR;
+
+	typedef struct _RTL_VERIFIER_DLL_DESCRIPTOR
+	{
+		PWCHAR DllName;
+		DWORD DllFlags;
+		PVOID DllAddress;
+		PRTL_VERIFIER_THUNK_DESCRIPTOR DllThunks;
+	} RTL_VERIFIER_DLL_DESCRIPTOR, * PRTL_VERIFIER_DLL_DESCRIPTOR;
+
+	typedef struct _RTL_VERIFIER_PROVIDER_DESCRIPTOR
+	{
+		DWORD Length;
+		PRTL_VERIFIER_DLL_DESCRIPTOR ProviderDlls;
+		RTL_VERIFIER_DLL_LOAD_CALLBACK ProviderDllLoadCallback;
+		RTL_VERIFIER_DLL_UNLOAD_CALLBACK ProviderDllUnloadCallback;
+		PWSTR VerifierImage;
+		DWORD VerifierFlags;
+		DWORD VerifierDebug;
+		PVOID RtlpGetStackTraceAddress;
+		PVOID RtlpDebugPageHeapCreate;
+		PVOID RtlpDebugPageHeapDestroy;
+		RTL_VERIFIER_NTDLLHEAPFREE_CALLBACK ProviderNtdllHeapFreeCallback;
+	} RTL_VERIFIER_PROVIDER_DESCRIPTOR, * PRTL_VERIFIER_PROVIDER_DESCRIPTOR;
+
+	typedef enum _POOL_TYPE {
+		NonPagedPool,
+		PagedPool,
+		NonPagedPoolMustSucceed,
+		DontUseThisType,
+		NonPagedPoolCacheAligned,
+		PagedPoolCacheAligned,
+		NonPagedPoolCacheAlignedMustS,
+		MaxPoolType
+	} POOL_TYPE;
+
+
+	//
+	// For NtQueryObject
+	//
+
+	typedef enum _OBJECT_INFORMATION_CLASS {
+		ObjectBasicInformation, // OBJECT_BASIC_INFORMATION
+		ObjectNameInformation, // OBJECT_NAME_INFORMATION
+		ObjectTypeInformation, // OBJECT_TYPE_INFORMATION
+		ObjectTypesInformation, // OBJECT_TYPES_INFORMATION
+		ObjectHandleFlagInformation, // OBJECT_HANDLE_FLAG_INFORMATION
+		ObjectSessionInformation,
+		ObjectSessionObjectInformation,
+		MaxObjectInfoClass
+	} OBJECT_INFORMATION_CLASS;
+
+	//
+	// NtQueryObject uses ObjectBasicInformation
+	//
+
+	typedef struct _OBJECT_BASIC_INFORMATION {
+		ULONG Attributes;
+		ACCESS_MASK GrantedAccess;
+		ULONG HandleCount;
+		ULONG PointerCount;
+		ULONG PagedPoolCharge;
+		ULONG NonPagedPoolCharge;
+		ULONG Reserved[3];
+		ULONG NameInfoSize;
+		ULONG TypeInfoSize;
+		ULONG SecurityDescriptorSize;
+		LARGE_INTEGER CreationTime;
+	} OBJECT_BASIC_INFORMATION, * POBJECT_BASIC_INFORMATION;
+
+	//
+	// NtQueryObject uses ObjectNameInformation
+	//
+
+	typedef struct _OBJECT_NAME_INFORMATION {
+		UNICODE_STRING Name;
+	} OBJECT_NAME_INFORMATION, * POBJECT_NAME_INFORMATION;
+
+	typedef struct _OBJECT_HANDLE_ATTRIBUTE_INFORMATION
+	{
+		BOOLEAN Inherit;
+		BOOLEAN ProtectFromClose;
+	} OBJECT_HANDLE_ATTRIBUTE_INFORMATION, * POBJECT_HANDLE_ATTRIBUTE_INFORMATION;
+
+	//
+	// NtQueryObject uses ObjectTypeInformation
+	//
+
+	typedef struct _OBJECT_TYPE_INFORMATION {
+		UNICODE_STRING TypeName;
+		ULONG TotalNumberOfObjects;
+		ULONG TotalNumberOfHandles;
+		ULONG TotalPagedPoolUsage;
+		ULONG TotalNonPagedPoolUsage;
+		ULONG TotalNamePoolUsage;
+		ULONG TotalHandleTableUsage;
+		ULONG HighWaterNumberOfObjects;
+		ULONG HighWaterNumberOfHandles;
+		ULONG HighWaterPagedPoolUsage;
+		ULONG HighWaterNonPagedPoolUsage;
+		ULONG HighWaterNamePoolUsage;
+		ULONG HighWaterHandleTableUsage;
+		ULONG InvalidAttributes;
+		GENERIC_MAPPING GenericMapping;
+		ULONG ValidAccessMask;
+		BOOLEAN SecurityRequired;
+		BOOLEAN MaintainHandleCount;
+		POOL_TYPE PoolType;
+		ULONG DefaultPagedPoolCharge;
+		ULONG DefaultNonPagedPoolCharge;
+	} OBJECT_TYPE_INFORMATION, * POBJECT_TYPE_INFORMATION;
+
+	//
+	// NtQueryObject uses ObjectHandleFlagInformation
+	// NtSetInformationObject uses ObjectHandleFlagInformation
+	//
+
+	typedef struct _OBJECT_HANDLE_FLAG_INFORMATION {
+		BOOLEAN Inherit;
+		BOOLEAN ProtectFromClose;
+	} OBJECT_HANDLE_FLAG_INFORMATION, * POBJECT_HANDLE_FLAG_INFORMATION;
+
+	//
+	// NtQueryDirectoryObject uses this type
+	//
+
+	typedef struct _OBJECT_DIRECTORY_INFORMATION {
+		UNICODE_STRING Name;
+		UNICODE_STRING TypeName;
+	} OBJECT_DIRECTORY_INFORMATION, * POBJECT_DIRECTORY_INFORMATION;
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtCreateDirectoryObject(
+			OUT PHANDLE             DirectoryHandle,
+			IN ACCESS_MASK          DesiredAccess,
+			IN POBJECT_ATTRIBUTES   ObjectAttributes);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtOpenDirectoryObject(
+			OUT PHANDLE DirectoryHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQueryDirectoryObject(
+			IN HANDLE DirectoryHandle,
+			OUT PVOID Buffer,
+			IN ULONG Length,
+			IN BOOLEAN ReturnSingleEntry,
+			IN BOOLEAN RestartScan,
+			IN OUT PULONG Context,
+			OUT PULONG ReturnLength OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQueryObject(
+			IN HANDLE ObjectHandle,
+			IN OBJECT_INFORMATION_CLASS ObjectInformationClass,
+			OUT PVOID ObjectInformation,
+			IN ULONG Length,
+			OUT PULONG ResultLength OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtSetInformationObject(
+			IN HANDLE ObjectHandle,
+			IN OBJECT_INFORMATION_CLASS ObjectInformationClass,
+			IN PVOID ObjectInformation,
+			IN ULONG Length
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtDuplicateObject(
+			IN HANDLE SourceProcessHandle,
+			IN HANDLE SourceHandle,
+			IN HANDLE TargetProcessHandle OPTIONAL,
+			OUT PHANDLE TargetHandle OPTIONAL,
+			IN ACCESS_MASK DesiredAccess,
+			IN ULONG HandleAttributes,
+			IN ULONG Options
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQuerySecurityObject(
+			IN HANDLE ObjectHandle,
+			IN SECURITY_INFORMATION SecurityInformation,
+			OUT PSECURITY_DESCRIPTOR SecurityDescriptor,
+			IN ULONG DescriptorLength,
+			OUT PULONG ReturnLength
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwQuerySecurityObject(
+			IN HANDLE ObjectHandle,
+			IN SECURITY_INFORMATION SecurityInformation,
+			OUT PSECURITY_DESCRIPTOR SecurityDescriptor,
+			IN ULONG DescriptorLength,
+			OUT PULONG ReturnLength
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtSetSecurityObject(
+			IN HANDLE ObjectHandle,
+			IN SECURITY_INFORMATION SecurityInformation,
+			IN PSECURITY_DESCRIPTOR SecurityDescriptor
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwSetSecurityObject(
+			IN HANDLE ObjectHandle,
+			IN SECURITY_INFORMATION SecurityInformation,
+			IN PSECURITY_DESCRIPTOR SecurityDescriptor
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtMakeTemporaryObject(
+			IN HANDLE ObjectHandle
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwMakeTemporaryObject(
+			IN HANDLE ObjectHandle
+		);
+
+	NTSYSAPI NTSTATUS NTAPI ZwMakePermanentObject(_In_ HANDLE Object);
+	NTSYSAPI NTSTATUS NTAPI NtMakePermanentObject(_In_ HANDLE Object);
+
+	//-----------------------------------------------------------------------------
+	// Handle table RTL functions
+
+#define LEVEL_HANDLE_ID         0x74000000
+#define LEVEL_HANDLE_ID_MASK    0xFF000000
+#define LEVEL_HANDLE_INDEX_MASK 0x00FFFFFF
+
+	typedef enum _RTL_GENERIC_COMPARE_RESULTS {
+		GenericLessThan,
+		GenericGreaterThan,
+		GenericEqual
+	} RTL_GENERIC_COMPARE_RESULTS;
+
+
+	typedef struct _RTL_SPLAY_LINKS
+	{
+		struct _RTL_SPLAY_LINKS* Parent;
+		struct _RTL_SPLAY_LINKS* LeftChild;
+		struct _RTL_SPLAY_LINKS* RightChild;
+	} RTL_SPLAY_LINKS, * PRTL_SPLAY_LINKS;
+
+
+	struct _RTL_GENERIC_TABLE;
+
+	typedef
+		RTL_GENERIC_COMPARE_RESULTS
+		(NTAPI* PRTL_GENERIC_COMPARE_ROUTINE) (
+			struct _RTL_GENERIC_TABLE* Table,
+			PVOID FirstStruct,
+			PVOID SecondStruct
+			);
+
+	typedef
+		PVOID
+		(NTAPI* PRTL_GENERIC_ALLOCATE_ROUTINE) (
+			struct _RTL_GENERIC_TABLE* Table,
+			ULONG ByteSize
+			);
+
+	typedef
+		VOID
+		(NTAPI* PRTL_GENERIC_FREE_ROUTINE) (
+			struct _RTL_GENERIC_TABLE* Table,
+			PVOID Buffer
+			);
+
+
+	typedef struct _RTL_GENERIC_TABLE {
+		PRTL_SPLAY_LINKS TableRoot;
+		LIST_ENTRY InsertOrderList;
+		PLIST_ENTRY OrderedPointer;
+		ULONG WhichOrderedElement;
+		ULONG NumberGenericTableElements;
+		PRTL_GENERIC_COMPARE_ROUTINE CompareRoutine;
+		PRTL_GENERIC_ALLOCATE_ROUTINE AllocateRoutine;
+		PRTL_GENERIC_FREE_ROUTINE FreeRoutine;
+		PVOID TableContext;
+	} RTL_GENERIC_TABLE, * PRTL_GENERIC_TABLE;
+
+
+	typedef struct _RTL_HANDLE_TABLE_ENTRY
+	{
+		struct _RTL_HANDLE_TABLE_ENTRY* Next;    /* pointer to next free handle */
+		PVOID  Object;
+
+	} RTL_HANDLE_TABLE_ENTRY, * PRTL_HANDLE_TABLE_ENTRY;
+
+
+	typedef struct _RTL_HANDLE_TABLE
+	{
+		ULONG MaximumNumberOfHandles;
+		ULONG SizeOfHandleTableEntry;
+		ULONG Unknown01;
+		ULONG Unknown02;
+		PRTL_HANDLE_TABLE_ENTRY FreeHandles;
+		PRTL_HANDLE_TABLE_ENTRY CommittedHandles;
+		PRTL_HANDLE_TABLE_ENTRY UnCommittedHandles;
+		PRTL_HANDLE_TABLE_ENTRY MaxReservedHandles;
+	} RTL_HANDLE_TABLE, * PRTL_HANDLE_TABLE;
+
+	NTSYSAPI NTSTATUS NTAPI NtCallbackReturn(void*, void*, NTSTATUS);
+
+	NTSYSAPI
+		VOID
+		NTAPI
+		RtlInitializeGenericTable(
+			IN PRTL_GENERIC_TABLE Table,
+			IN PRTL_GENERIC_COMPARE_ROUTINE CompareRoutine,
+			IN PRTL_GENERIC_ALLOCATE_ROUTINE AllocateRoutine,
+			IN PRTL_GENERIC_FREE_ROUTINE FreeRoutine,
+			IN PVOID TableContext
+		);
+
+
+	NTSYSAPI
+		VOID
+		NTAPI
+		RtlInitializeHandleTable(
+			IN ULONG MaximumNumberOfHandles,
+			IN ULONG SizeOfHandleTableEntry,
+			OUT PRTL_HANDLE_TABLE HandleTable
+		);
+
+
+	NTSYSAPI
+		PRTL_HANDLE_TABLE_ENTRY
+		NTAPI
+		RtlAllocateHandle(
+			IN PRTL_HANDLE_TABLE HandleTable,
+			OUT PULONG HandleIndex OPTIONAL
+		);
+
+
+	NTSYSAPI
+		BOOLEAN
+		NTAPI
+		RtlFreeHandle(
+			IN PRTL_HANDLE_TABLE HandleTable,
+			IN PRTL_HANDLE_TABLE_ENTRY Handle
+		);
+
+
+	NTSYSAPI
+		BOOLEAN
+		NTAPI
+		RtlIsValidIndexHandle(
+			IN PRTL_HANDLE_TABLE HandleTable,
+			IN ULONG HandleIndex,
+			OUT PRTL_HANDLE_TABLE_ENTRY* Handle
+		);
+
+
+	NTSYSAPI
+		PVOID
+		NTAPI
+		RtlInsertElementGenericTable(
+			IN PRTL_GENERIC_TABLE Table,
+			IN PVOID Buffer,
+			IN LONG BufferSize,
+			OUT PBOOLEAN NewElement OPTIONAL
+		);
+
+
+	NTSYSAPI
+		BOOLEAN
+		NTAPI
+		RtlIsGenericTableEmpty(
+			IN PRTL_GENERIC_TABLE Table
+		);
+
+
+	NTSYSAPI
+		BOOLEAN
+		NTAPI
+		RtlIsGenericTableEmpty(
+			IN PRTL_GENERIC_TABLE Table
+		);
+
+
+	NTSYSAPI
+		PVOID
+		NTAPI
+		RtlLookupElementGenericTable(
+			IN PRTL_GENERIC_TABLE Table,
+			IN PVOID Buffer
+		);
+
+
+	NTSYSAPI
+		PVOID
+		NTAPI
+		RtlEnumerateGenericTableWithoutSplaying(
+			IN  PRTL_GENERIC_TABLE Table,
+			IN  PVOID* RestartKey
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtClose(
+			IN  HANDLE Handle
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwClose(
+			IN  HANDLE Handle
+		);
+
+	//-----------------------------------------------------------------------------
+	// Environment functions
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlOpenCurrentUser(
+			IN ULONG DesiredAccess,
+			OUT PHANDLE CurrentUserKey
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlCreateEnvironment(
+			BOOLEAN CloneCurrentEnvironment,
+			PVOID* Environment
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlQueryEnvironmentVariable_U(
+			PVOID Environment,
+			PUNICODE_STRING Name,
+			PUNICODE_STRING Value
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlSetEnvironmentVariable(
+			PVOID* Environment,
+			PUNICODE_STRING Name,
+			PUNICODE_STRING Value
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlDestroyEnvironment(
+			PVOID Environment
+		);
+
+	//-----------------------------------------------------------------------------
+	// Registry functions
+
+
+	typedef enum _KEY_INFORMATION_CLASS
+	{
+		KeyBasicInformation,                    // 0x00
+		KeyNodeInformation,                     // 0x01
+		KeyFullInformation,                     // 0x02
+		KeyNameInformation,                     // 0x03
+		KeyCachedInformation,                   // 0x04
+		KeyFlagsInformation,                    // 0x05
+		MaxKeyInfoClass                         // MaxKeyInfoClass should always be the last enum
+
+	} KEY_INFORMATION_CLASS;
+
+	//
+	// Key query structures
+	//
+
+	typedef struct _KEY_BASIC_INFORMATION
+	{
+		LARGE_INTEGER LastWriteTime;
+		ULONG   TitleIndex;
+		ULONG   NameLength;
+		WCHAR   Name[1];            // Variable length string
+
+	} KEY_BASIC_INFORMATION, * PKEY_BASIC_INFORMATION;
+
+
+	typedef struct _KEY_NODE_INFORMATION
+	{
+		LARGE_INTEGER LastWriteTime;
+		ULONG   TitleIndex;
+		ULONG   ClassOffset;
+		ULONG   ClassLength;
+		ULONG   NameLength;
+		WCHAR   Name[1];            // Variable length string
+		//          Class[1];           // Variable length string not declared
+	} KEY_NODE_INFORMATION, * PKEY_NODE_INFORMATION;
+
+
+	typedef struct _KEY_FULL_INFORMATION
+	{
+		LARGE_INTEGER LastWriteTime;
+		ULONG   TitleIndex;
+		ULONG   ClassOffset;
+		ULONG   ClassLength;
+		ULONG   SubKeys;
+		ULONG   MaxNameLen;
+		ULONG   MaxClassLen;
+		ULONG   Values;
+		ULONG   MaxValueNameLen;
+		ULONG   MaxValueDataLen;
+		WCHAR   Class[1];           // Variable length
+
+	} KEY_FULL_INFORMATION, * PKEY_FULL_INFORMATION;
+
+
+	// end_wdm
+	typedef struct _KEY_NAME_INFORMATION
+	{
+		ULONG   NameLength;
+		WCHAR   Name[1];            // Variable length string
+
+	} KEY_NAME_INFORMATION, * PKEY_NAME_INFORMATION;
+
+	typedef struct _KEY_CACHED_INFORMATION
+	{
+		LARGE_INTEGER LastWriteTime;
+		ULONG   TitleIndex;
+		ULONG   SubKeys;
+		ULONG   MaxNameLen;
+		ULONG   Values;
+		ULONG   MaxValueNameLen;
+		ULONG   MaxValueDataLen;
+		ULONG   NameLength;
+		WCHAR   Name[1];            // Variable length string
+
+	} KEY_CACHED_INFORMATION, * PKEY_CACHED_INFORMATION;
+
+
+	typedef struct _KEY_FLAGS_INFORMATION
+	{
+		ULONG   UserFlags;
+
+	} KEY_FLAGS_INFORMATION, * PKEY_FLAGS_INFORMATION;
+
+
+
+	typedef enum _KEY_VALUE_INFORMATION_CLASS {
+		KeyValueBasicInformation,               // 0x00
+		KeyValueFullInformation,                // 0x01
+		KeyValuePartialInformation,             // 0x02
+		KeyValueFullInformationAlign64,         // 0x03
+		KeyValuePartialInformationAlign64,      // 0x04
+		MaxKeyValueInfoClass                    // MaxKeyValueInfoClass should always be the last enum
+	} KEY_VALUE_INFORMATION_CLASS;
+
+	typedef struct _KEY_VALUE_BASIC_INFORMATION
+	{
+		ULONG TitleIndex;
+		ULONG Type;
+		ULONG NameLength;
+		WCHAR Name[1];  //  Variable size
+	} KEY_VALUE_BASIC_INFORMATION, * PKEY_VALUE_BASIC_INFORMATION;
+
+	typedef struct _KEY_VALUE_FULL_INFORMATION
+	{
+		ULONG TitleIndex;
+		ULONG Type;
+		ULONG DataOffset;
+		ULONG DataLength;
+		ULONG NameLength;
+		WCHAR Name[1];            // Variable size
+		//        Data[1];            // Variable size data not declared
+	} KEY_VALUE_FULL_INFORMATION, * PKEY_VALUE_FULL_INFORMATION;
+
+
+	typedef struct _KEY_VALUE_PARTIAL_INFORMATION {
+		ULONG   TitleIndex;
+		ULONG   Type;
+		ULONG   DataLength;
+		UCHAR   Data[1];            // Variable size
+	} KEY_VALUE_PARTIAL_INFORMATION, * PKEY_VALUE_PARTIAL_INFORMATION;
+
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtCreateKey(
+			OUT PHANDLE KeyHandle,
+			IN  ACCESS_MASK DesiredAccess,
+			IN  POBJECT_ATTRIBUTES ObjectAttributes,
+			IN  ULONG TitleIndex,
+			IN  PUNICODE_STRING Class OPTIONAL,
+			IN  ULONG CreateOptions,
+			OUT PULONG Disposition OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtOpenKey(
+			OUT PHANDLE KeyHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtEnumerateKey(
+			IN HANDLE KeyHandle,
+			IN ULONG Index,
+			IN KEY_INFORMATION_CLASS KeyInformationClass,
+			IN PVOID KeyInformation,
+			IN ULONG Length,
+			IN PULONG ResultLength
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwEnumerateKey(
+			IN HANDLE KeyHandle,
+			IN ULONG Index,
+			IN KEY_INFORMATION_CLASS KeyInformationClass,
+			IN PVOID KeyInformation,
+			IN ULONG Length,
+			IN PULONG ResultLength
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtEnumerateValueKey(
+			IN HANDLE KeyHandle,
+			IN ULONG Index,
+			IN KEY_VALUE_INFORMATION_CLASS KeyValueInformationClass,
+			OUT PVOID  KeyValueInformation,
+			IN  ULONG  Length,
+			OUT PULONG  ResultLength
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwEnumerateValueKey(
+			IN HANDLE KeyHandle,
+			IN ULONG Index,
+			IN KEY_VALUE_INFORMATION_CLASS KeyValueInformationClass,
+			OUT PVOID  KeyValueInformation,
+			IN  ULONG  Length,
+			OUT PULONG  ResultLength
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtDeleteKey(
+			IN HANDLE KeyHandle
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQueryKey(
+			IN  HANDLE KeyHandle,
+			IN  KEY_INFORMATION_CLASS KeyInformationClass,
+			OUT PVOID KeyInformation OPTIONAL,
+			IN  ULONG Length,
+			OUT PULONG ResultLength
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQueryValueKey(
+			IN HANDLE KeyHandle,
+			IN PUNICODE_STRING ValueName,
+			IN KEY_VALUE_INFORMATION_CLASS KeyValueInformationClass,
+			OUT PVOID KeyValueInformation,
+			IN ULONG Length,
+			OUT PULONG ResultLength
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtSetValueKey(
+			IN HANDLE KeyHandle,
+			IN PUNICODE_STRING ValueName,
+			IN ULONG TitleIndex OPTIONAL,
+			IN ULONG Type,
+			IN PVOID Data,
+			IN ULONG DataSize
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtDeleteValueKey(
+			IN HANDLE KeyHandle,
+			IN PUNICODE_STRING ValueName
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtFlushKey(
+			IN HANDLE KeyHandle
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQueryPerformanceCounter(
+			OUT PLARGE_INTEGER PerformanceCounter,
+			OUT PLARGE_INTEGER PerformanceFrequency OPTIONAL);
+
+	//-----------------------------------------------------------------------------
+	// RtlQueryRegistryValues
+
+	//
+	// The following flags specify how the Name field of a RTL_QUERY_REGISTRY_TABLE
+	// entry is interpreted.  A NULL name indicates the end of the table.
+	//
+
+#define RTL_QUERY_REGISTRY_SUBKEY   0x00000001  // Name is a subkey and remainder of
+	// table or until next subkey are value
+	// names for that subkey to look at.
+
+#define RTL_QUERY_REGISTRY_TOPKEY   0x00000002  // Reset current key to original key for
+	// this and all following table entries.
+
+#define RTL_QUERY_REGISTRY_REQUIRED 0x00000004  // Fail if no match found for this table
+	// entry.
+
+#define RTL_QUERY_REGISTRY_NOVALUE  0x00000008  // Used to mark a table entry that has no
+	// value name, just wants a call out, not
+	// an enumeration of all values.
+
+#define RTL_QUERY_REGISTRY_NOEXPAND 0x00000010  // Used to suppress the expansion of
+	// REG_MULTI_SZ into multiple callouts or
+	// to prevent the expansion of environment
+	// variable values in REG_EXPAND_SZ
+
+#define RTL_QUERY_REGISTRY_DIRECT   0x00000020  // QueryRoutine field ignored.  EntryContext
+	// field points to location to store value.
+	// For null terminated strings, EntryContext
+	// points to UNICODE_STRING structure that
+	// that describes maximum size of buffer.
+	// If .Buffer field is NULL then a buffer is
+	// allocated.
+	//
+
+#define RTL_QUERY_REGISTRY_DELETE   0x00000040  // Used to delete value keys after they
+	// are queried.
+
+
+	//
+	// The following values for the RelativeTo parameter determine what the
+	// Path parameter to RtlQueryRegistryValues is relative to.
+	//
+
+#define RTL_REGISTRY_ABSOLUTE     0             // Path is a full path
+#define RTL_REGISTRY_SERVICES     1             // \Registry\Machine\System\CurrentControlSet\Services
+#define RTL_REGISTRY_CONTROL      2             // \Registry\Machine\System\CurrentControlSet\Control
+#define RTL_REGISTRY_WINDOWS_NT   3             // \Registry\Machine\Software\Microsoft\Windows NT\CurrentVersion
+#define RTL_REGISTRY_DEVICEMAP    4             // \Registry\Machine\Hardware\DeviceMap
+#define RTL_REGISTRY_USER         5             // \Registry\User\CurrentUser
+#define RTL_REGISTRY_MAXIMUM      6
+#define RTL_REGISTRY_HANDLE       0x40000000    // Low order bits are registry handle
+#define RTL_REGISTRY_OPTIONAL     0x80000000    // Indicates the key node is optional
+
+
+	typedef NTSTATUS(NTAPI* PRTL_QUERY_REGISTRY_ROUTINE)(
+		IN PWSTR ValueName,
+		IN ULONG ValueType,
+		IN PVOID ValueData,
+		IN ULONG ValueLength,
+		IN PVOID Context,
+		IN PVOID EntryContext
+		);
+
+	typedef struct _RTL_QUERY_REGISTRY_TABLE
+	{
+		PRTL_QUERY_REGISTRY_ROUTINE QueryRoutine;
+		ULONG Flags;
+		PWSTR Name;
+		PVOID EntryContext;
+		ULONG DefaultType;
+		PVOID DefaultData;
+		ULONG DefaultLength;
+
+	} RTL_QUERY_REGISTRY_TABLE, * PRTL_QUERY_REGISTRY_TABLE;
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlQueryRegistryValues(
+			IN ULONG  RelativeTo,
+			IN PCWSTR  Path,
+			IN PRTL_QUERY_REGISTRY_TABLE  QueryTable,
+			IN PVOID  Context,
+			IN PVOID  Environment OPTIONAL
+		);
+
+
+	//-----------------------------------------------------------------------------
+	// Query system information
+
+	typedef enum _SYSTEM_INFORMATION_CLASS
+	{
+		SystemBasicInformation,                         // 0x00 SYSTEM_BASIC_INFORMATION
+		SystemProcessorInformation,                     // 0x01 SYSTEM_PROCESSOR_INFORMATION
+		SystemPerformanceInformation,                   // 0x02
+		SystemTimeOfDayInformation,                     // 0x03
+		SystemPathInformation,                          // 0x04
+		SystemProcessInformation,                       // 0x05
+		SystemCallCountInformation,                     // 0x06
+		SystemDeviceInformation,                        // 0x07
+		SystemProcessorPerformanceInformation,          // 0x08
+		SystemFlagsInformation,                         // 0x09
+		SystemCallTimeInformation,                      // 0x0A
+		SystemModuleInformation,                        // 0x0B SYSTEM_MODULE_INFORMATION
+		SystemLocksInformation,                         // 0x0C
+		SystemStackTraceInformation,                    // 0x0D
+		SystemPagedPoolInformation,                     // 0x0E
+		SystemNonPagedPoolInformation,                  // 0x0F
+		SystemHandleInformation,                        // 0x10
+		SystemObjectInformation,                        // 0x11
+		SystemPageFileInformation,                      // 0x12
+		SystemVdmInstemulInformation,                   // 0x13
+		SystemVdmBopInformation,                        // 0x14
+		SystemFileCacheInformation,                     // 0x15
+		SystemPoolTagInformation,                       // 0x16
+		SystemInterruptInformation,                     // 0x17
+		SystemDpcBehaviorInformation,                   // 0x18
+		SystemFullMemoryInformation,                    // 0x19
+		SystemLoadGdiDriverInformation,                 // 0x1A
+		SystemUnloadGdiDriverInformation,               // 0x1B
+		SystemTimeAdjustmentInformation,                // 0x1C
+		SystemSummaryMemoryInformation,                 // 0x1D
+		SystemMirrorMemoryInformation,                  // 0x1E
+		SystemPerformanceTraceInformation,              // 0x1F
+		SystemObsolete0,                                // 0x20
+		SystemExceptionInformation,                     // 0x21
+		SystemCrashDumpStateInformation,                // 0x22
+		SystemKernelDebuggerInformation,                // 0x23
+		SystemContextSwitchInformation,                 // 0x24
+		SystemRegistryQuotaInformation,                 // 0x25
+		SystemExtendServiceTableInformation,            // 0x26
+		SystemPrioritySeperation,                       // 0x27
+		SystemPlugPlayBusInformation,                   // 0x28
+		SystemDockInformation,                          // 0x29
+		SystemPowerInformationNative,                   // 0x2A
+		SystemProcessorSpeedInformation,                // 0x2B
+		SystemCurrentTimeZoneInformation,               // 0x2C
+		SystemLookasideInformation,                     // 0x2D
+		SystemTimeSlipNotification,                     // 0x2E
+		SystemSessionCreate,                            // 0x2F
+		SystemSessionDetach,                            // 0x30
+		SystemSessionInformation,                       // 0x31
+		SystemRangeStartInformation,                    // 0x32
+		SystemVerifierInformation,                      // 0x33
+		SystemAddVerifier,                              // 0x34
+		SystemSessionProcessesInformation,              // 0x35
+		SystemLoadGdiDriverInSystemSpaceInformation,    // 0x36
+		SystemNumaProcessorMap,                         // 0x37
+		SystemPrefetcherInformation,                    // 0x38
+		SystemExtendedProcessInformation,               // 0x39
+		SystemRecommendedSharedDataAlignment,           // 0x3A
+		SystemComPlusPackage,                           // 0x3B
+		SystemNumaAvailableMemory,                      // 0x3C
+		SystemProcessorPowerInformation,                // 0x3D
+		SystemEmulationBasicInformation,                // 0x3E
+		SystemEmulationProcessorInformation,            // 0x3F
+		SystemExtendedHanfleInformation,                // 0x40
+		SystemLostDelayedWriteInformation,              // 0x41
+		SystemBigPoolInformation,                       // 0x42
+		SystemSessionPoolTagInformation,                // 0x43
+		SystemSessionMappedViewInformation,             // 0x44
+		SystemHotpatchInformation,                      // 0x45
+		SystemObjectSecurityMode,                       // 0x46
+		SystemWatchDogTimerHandler,                     // 0x47
+		SystemWatchDogTimerInformation,                 // 0x48
+		SystemLogicalProcessorInformation,              // 0x49
+		SystemWo64SharedInformationObosolete,           // 0x4A
+		SystemRegisterFirmwareTableInformationHandler,  // 0x4B
+		SystemFirmwareTableInformation,                 // 0x4C
+		SystemModuleInformationEx,                      // 0x4D
+		SystemVerifierTriageInformation,                // 0x4E
+		SystemSuperfetchInformation,                    // 0x4F
+		SystemMemoryListInformation,                    // 0x50
+		SystemFileCacheInformationEx,                   // 0x51
+		SystemThreadPriorityClientIdInformation,        // 0x52
+		SystemProcessorIdleCycleTimeInformation,        // 0x53
+		SystemVerifierCancellationInformation,          // 0x54
+		SystemProcessorPowerInformationEx,              // 0x55
+		SystemRefTraceInformation,                      // 0x56
+		SystemSpecialPoolInformation,                   // 0x57
+		SystemProcessIdInformation,                     // 0x58
+		SystemErrorPortInformation,                     // 0x59
+		SystemBootEnvironmentInformation,               // 0x5A SYSTEM_BOOT_ENVIRONMENT_INFORMATION
+		SystemHypervisorInformation,                    // 0x5B
+		SystemVerifierInformationEx,                    // 0x5C
+		SystemTimeZoneInformation,                      // 0x5D
+		SystemImageFileExecutionOptionsInformation,     // 0x5E
+		SystemCoverageInformation,                      // 0x5F
+		SystemPrefetchPathInformation,                  // 0x60
+		SystemVerifierFaultsInformation,                // 0x61
+		MaxSystemInfoClass                              // 0x67
+
+	} SYSTEM_INFORMATION_CLASS, * PSYSTEM_INFORMATION_CLASS;
+
+	//                                                  
+	// Thread priority                                  
+	//                                                  
+
+	typedef LONG KPRIORITY;
+
+	//
+	// Basic System information 
+	// NtQuerySystemInformation with SystemBasicInformation
+	//
+
+	typedef struct _SYSTEM_BASIC_INFORMATION {
+		ULONG Reserved;
+		ULONG TimerResolution;
+		ULONG PageSize;
+		ULONG NumberOfPhysicalPages;
+		ULONG LowestPhysicalPageNumber;
+		ULONG HighestPhysicalPageNumber;
+		ULONG AllocationGranularity;
+		ULONG MinimumUserModeAddress;
+		ULONG MaximumUserModeAddress;
+		KAFFINITY ActiveProcessorsAffinityMask;
+		CCHAR NumberOfProcessors;
+	} SYSTEM_BASIC_INFORMATION, * PSYSTEM_BASIC_INFORMATION;
+
+	//
+	// Processor information
+	// NtQuerySystemInformation with SystemProcessorInformation
+	//
+
+	typedef struct _SYSTEM_PROCESSOR_INFORMATION {
+		USHORT ProcessorArchitecture;
+		USHORT ProcessorLevel;
+		USHORT ProcessorRevision;
+		USHORT Reserved;
+		ULONG ProcessorFeatureBits;
+	} SYSTEM_PROCESSOR_INFORMATION, * PSYSTEM_PROCESSOR_INFORMATION;
+
+	//
+	// Performance information
+	// NtQuerySystemInformation with SystemPerformanceInformation
+	//
+
+	typedef struct _SYSTEM_PERFORMANCE_INFORMATION {
+		LARGE_INTEGER IdleProcessTime;
+		LARGE_INTEGER IoReadTransferCount;
+		LARGE_INTEGER IoWriteTransferCount;
+		LARGE_INTEGER IoOtherTransferCount;
+		ULONG IoReadOperationCount;
+		ULONG IoWriteOperationCount;
+		ULONG IoOtherOperationCount;
+		ULONG AvailablePages;
+		ULONG CommittedPages;
+		ULONG CommitLimit;
+		ULONG PeakCommitment;
+		ULONG PageFaultCount;
+		ULONG CopyOnWriteCount;
+		ULONG TransitionCount;
+		ULONG CacheTransitionCount;
+		ULONG DemandZeroCount;
+		ULONG PageReadCount;
+		ULONG PageReadIoCount;
+		ULONG CacheReadCount;
+		ULONG CacheIoCount;
+		ULONG DirtyPagesWriteCount;
+		ULONG DirtyWriteIoCount;
+		ULONG MappedPagesWriteCount;
+		ULONG MappedWriteIoCount;
+		ULONG PagedPoolPages;
+		ULONG NonPagedPoolPages;
+		ULONG PagedPoolAllocs;
+		ULONG PagedPoolFrees;
+		ULONG NonPagedPoolAllocs;
+		ULONG NonPagedPoolFrees;
+		ULONG FreeSystemPtes;
+		ULONG ResidentSystemCodePage;
+		ULONG TotalSystemDriverPages;
+		ULONG TotalSystemCodePages;
+		ULONG NonPagedPoolLookasideHits;
+		ULONG PagedPoolLookasideHits;
+		ULONG Spare3Count;
+		ULONG ResidentSystemCachePage;
+		ULONG ResidentPagedPoolPage;
+		ULONG ResidentSystemDriverPage;
+		ULONG CcFastReadNoWait;
+		ULONG CcFastReadWait;
+		ULONG CcFastReadResourceMiss;
+		ULONG CcFastReadNotPossible;
+		ULONG CcFastMdlReadNoWait;
+		ULONG CcFastMdlReadWait;
+		ULONG CcFastMdlReadResourceMiss;
+		ULONG CcFastMdlReadNotPossible;
+		ULONG CcMapDataNoWait;
+		ULONG CcMapDataWait;
+		ULONG CcMapDataNoWaitMiss;
+		ULONG CcMapDataWaitMiss;
+		ULONG CcPinMappedDataCount;
+		ULONG CcPinReadNoWait;
+		ULONG CcPinReadWait;
+		ULONG CcPinReadNoWaitMiss;
+		ULONG CcPinReadWaitMiss;
+		ULONG CcCopyReadNoWait;
+		ULONG CcCopyReadWait;
+		ULONG CcCopyReadNoWaitMiss;
+		ULONG CcCopyReadWaitMiss;
+		ULONG CcMdlReadNoWait;
+		ULONG CcMdlReadWait;
+		ULONG CcMdlReadNoWaitMiss;
+		ULONG CcMdlReadWaitMiss;
+		ULONG CcReadAheadIos;
+		ULONG CcLazyWriteIos;
+		ULONG CcLazyWritePages;
+		ULONG CcDataFlushes;
+		ULONG CcDataPages;
+		ULONG ContextSwitches;
+		ULONG FirstLevelTbFills;
+		ULONG SecondLevelTbFills;
+		ULONG SystemCalls;
+	} SYSTEM_PERFORMANCE_INFORMATION, * PSYSTEM_PERFORMANCE_INFORMATION;
+
+	//
+	// Time of Day information
+	// NtQuerySystemInformation with SystemTimeOfDayInformation
+	//
+
+	typedef struct _SYSTEM_TIMEOFDAY_INFORMATION {
+		LARGE_INTEGER BootTime;
+		LARGE_INTEGER CurrentTime;
+		LARGE_INTEGER TimeZoneBias;
+		ULONG TimeZoneId;
+		ULONG Reserved;
+	} SYSTEM_TIMEOFDAY_INFORMATION, * PSYSTEM_TIMEOFDAY_INFORMATION;
+
+	//
+	// Process information
+	// NtQuerySystemInformation with SystemProcessInformation
+	//
+
+
+	typedef enum _KWAIT_REASON
+	{
+		Executive,
+		FreePage,
+		PageIn,
+		PoolAllocation,
+		DelayExecution,
+		Suspended,
+		UserRequest,
+		WrExecutive,
+		WrFreePage,
+		WrPageIn,
+		WrPoolAllocation,
+		WrDelayExecution,
+		WrSuspended,
+		WrUserRequest,
+		WrEventPair,
+		WrQueue,
+		WrLpcReceive,
+		WrLpcReply,
+		WrVirtualMemory,
+		WrPageOut,
+		WrRendezvous,
+		WrKeyedEvent,
+		WrTerminated,
+		WrProcessInSwap,
+		WrCpuRateControl,
+		WrCalloutStack,
+		WrKernel,
+		WrResource,
+		WrPushLock,
+		WrMutex,
+		WrQuantumEnd,
+		WrDispatchInt,
+		WrPreempted,
+		WrYieldExecution,
+		WrFastMutex,
+		WrGuardedMutex,
+		WrRundown,
+		WrAlertByThreadId,
+		WrDeferredPreempt,
+		WrPhysicalFault,
+		MaximumWaitReason
+	} KWAIT_REASON;
+
+	typedef struct _SYSTEM_THREAD_INFORMATION
+	{
+		LARGE_INTEGER KernelTime;
+		LARGE_INTEGER UserTime;
+		LARGE_INTEGER CreateTime;
+		ULONG WaitTime;
+		PVOID StartAddress;
+		CLIENT_ID ClientId;
+		KPRIORITY Priority;
+		LONG BasePriority;
+		ULONG ContextSwitches;
+		ULONG ThreadState;
+		KWAIT_REASON WaitReason;
+	} SYSTEM_THREAD_INFORMATION, * PSYSTEM_THREAD_INFORMATION;
+
+	typedef struct _SYSTEM_PROCESS_INFORMATION
+	{
+		ULONG NextEntryOffset;
+		ULONG NumberOfThreads;
+		LARGE_INTEGER WorkingSetPrivateSize; // Since Vista
+		ULONG HardFaultCount; // Since Windows 7
+		ULONG NumberOfThreadsHighWatermark; // Since Windows 7
+		ULONGLONG CycleTime; // Since Windows 7
+		LARGE_INTEGER CreateTime;
+		LARGE_INTEGER UserTime;
+		LARGE_INTEGER KernelTime;
+		UNICODE_STRING ImageName;
+		KPRIORITY BasePriority;
+		HANDLE UniqueProcessId;
+		HANDLE InheritedFromUniqueProcessId;
+		ULONG HandleCount;
+		ULONG SessionId;
+		ULONG_PTR UniqueProcessKey; // Since Vista (requires SystemExtendedProcessInformation)
+		SIZE_T PeakVirtualSize;
+		SIZE_T VirtualSize;
+		ULONG PageFaultCount;
+		SIZE_T PeakWorkingSetSize;
+		SIZE_T WorkingSetSize;
+		SIZE_T QuotaPeakPagedPoolUsage;
+		SIZE_T QuotaPagedPoolUsage;
+		SIZE_T QuotaPeakNonPagedPoolUsage;
+		SIZE_T QuotaNonPagedPoolUsage;
+		SIZE_T PagefileUsage;
+		SIZE_T PeakPagefileUsage;
+		SIZE_T PrivatePageCount;
+		LARGE_INTEGER ReadOperationCount;
+		LARGE_INTEGER WriteOperationCount;
+		LARGE_INTEGER OtherOperationCount;
+		LARGE_INTEGER ReadTransferCount;
+		LARGE_INTEGER WriteTransferCount;
+		LARGE_INTEGER OtherTransferCount;
+		SYSTEM_THREAD_INFORMATION Threads[1]; // SystemProcessInformation
+		// SYSTEM_EXTENDED_THREAD_INFORMATION Threads[1]; // SystemExtendedProcessinformation
+		// SYSTEM_EXTENDED_THREAD_INFORMATION + SYSTEM_PROCESS_INFORMATION_EXTENSION // SystemFullProcessInformation
+	} SYSTEM_PROCESS_INFORMATION, * PSYSTEM_PROCESS_INFORMATION;
+
+	//
+	// Device information
+	// NtQuerySystemInformation with SystemDeviceInformation
+	//
+
+	typedef struct _SYSTEM_DEVICE_INFORMATION {
+		ULONG NumberOfDisks;
+		ULONG NumberOfFloppies;
+		ULONG NumberOfCdRoms;
+		ULONG NumberOfTapes;
+		ULONG NumberOfSerialPorts;
+		ULONG NumberOfParallelPorts;
+	} SYSTEM_DEVICE_INFORMATION, * PSYSTEM_DEVICE_INFORMATION;
+
+	//
+	// Processor performance information
+	// NtQuerySystemInformation with SystemProcessorPerformanceInformation
+	//
+
+	typedef struct _SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION {
+		LARGE_INTEGER IdleTime;
+		LARGE_INTEGER KernelTime;
+		LARGE_INTEGER UserTime;
+		LARGE_INTEGER DpcTime;          // DEVL only
+		LARGE_INTEGER InterruptTime;    // DEVL only
+		ULONG InterruptCount;
+	} SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION, * PSYSTEM_PROCESSOR_PERFORMANCE_INFORMATION;
+
+	//
+	// NT Global Flag information
+	// NtQuerySystemInformation with SystemFlagsInformation
+	//
+
+	typedef struct _SYSTEM_FLAGS_INFORMATION
+	{
+		ULONG GlobalFlag;
+
+	} SYSTEM_FLAGS_INFORMATION, * PSYSTEM_FLAGS_INFORMATION;
+
+	//
+	// System Module information 
+	// NtQuerySystemInformation with SystemModuleInformation
+	//
+
+	typedef struct _SYSTEM_MODULE
+	{
+		HANDLE Section;                 // Not filled in
+		PVOID  MappedBase;
+		PVOID  ImageBase;
+		ULONG  ImageSize;
+		ULONG  Flags;
+		USHORT LoadOrderIndex;
+		USHORT InitOrderIndex;
+		USHORT LoadCount;
+		USHORT OffsetToFileName;
+		CHAR   ImageName[256];
+
+	} SYSTEM_MODULE, * PSYSTEM_MODULE;
+
+
+	typedef struct _SYSTEM_MODULE_INFORMATION
+	{
+		ULONG         ModulesCount;
+		SYSTEM_MODULE Modules[1];
+
+	} SYSTEM_MODULE_INFORMATION, * PSYSTEM_MODULE_INFORMATION;
+
+	/*
+	typedef struct _SYSTEM_VDM_INSTEMUL_INFO {
+	ULONG SegmentNotPresent ;
+	ULONG VdmOpcode0F       ;
+	ULONG OpcodeESPrefix    ;
+	ULONG OpcodeCSPrefix    ;
+	ULONG OpcodeSSPrefix    ;
+	ULONG OpcodeDSPrefix    ;
+	ULONG OpcodeFSPrefix    ;
+	ULONG OpcodeGSPrefix    ;
+	ULONG OpcodeOPER32Prefix;
+	ULONG OpcodeADDR32Prefix;
+	ULONG OpcodeINSB        ;
+	ULONG OpcodeINSW        ;
+	ULONG OpcodeOUTSB       ;
+	ULONG OpcodeOUTSW       ;
+	ULONG OpcodePUSHF       ;
+	ULONG OpcodePOPF        ;
+	ULONG OpcodeINTnn       ;
+	ULONG OpcodeINTO        ;
+	ULONG OpcodeIRET        ;
+	ULONG OpcodeINBimm      ;
+	ULONG OpcodeINWimm      ;
+	ULONG OpcodeOUTBimm     ;
+	ULONG OpcodeOUTWimm     ;
+	ULONG OpcodeINB         ;
+	ULONG OpcodeINW         ;
+	ULONG OpcodeOUTB        ;
+	ULONG OpcodeOUTW        ;
+	ULONG OpcodeLOCKPrefix  ;
+	ULONG OpcodeREPNEPrefix ;
+	ULONG OpcodeREPPrefix   ;
+	ULONG OpcodeHLT         ;
+	ULONG OpcodeCLI         ;
+	ULONG OpcodeSTI         ;
+	ULONG BopCount          ;
+	} SYSTEM_VDM_INSTEMUL_INFO, *PSYSTEM_VDM_INSTEMUL_INFO;
+
+
+	typedef struct _SYSTEM_QUERY_TIME_ADJUST_INFORMATION {
+	ULONG TimeAdjustment;
+	ULONG TimeIncrement;
+	BOOLEAN Enable;
+	} SYSTEM_QUERY_TIME_ADJUST_INFORMATION, *PSYSTEM_QUERY_TIME_ADJUST_INFORMATION;
+
+	typedef struct _SYSTEM_SET_TIME_ADJUST_INFORMATION {
+	ULONG TimeAdjustment;
+	BOOLEAN Enable;
+	} SYSTEM_SET_TIME_ADJUST_INFORMATION, *PSYSTEM_SET_TIME_ADJUST_INFORMATION;
+
+
+	typedef struct _SYSTEM_THREAD_INFORMATION {
+	LARGE_INTEGER KernelTime;
+	LARGE_INTEGER UserTime;
+	LARGE_INTEGER CreateTime;
+	ULONG WaitTime;
+	PVOID StartAddress;
+	CLIENT_ID ClientId;
+	KPRIORITY Priority;
+	LONG BasePriority;
+	ULONG ContextSwitches;
+	ULONG ThreadState;
+	ULONG WaitReason;
+	} SYSTEM_THREAD_INFORMATION, *PSYSTEM_THREAD_INFORMATION;
+
+	typedef struct _SYSTEM_MEMORY_INFO {
+	PUCHAR StringOffset;
+	USHORT ValidCount;
+	USHORT TransitionCount;
+	USHORT ModifiedCount;
+	USHORT PageTableCount;
+	} SYSTEM_MEMORY_INFO, *PSYSTEM_MEMORY_INFO;
+
+	typedef struct _SYSTEM_MEMORY_INFORMATION {
+	ULONG InfoSize;
+	ULONG StringStart;
+	SYSTEM_MEMORY_INFO Memory[1];
+	} SYSTEM_MEMORY_INFORMATION, *PSYSTEM_MEMORY_INFORMATION;
+
+	typedef struct _SYSTEM_CALL_COUNT_INFORMATION {
+	ULONG Length;
+	ULONG NumberOfTables;
+	//ULONG NumberOfEntries[NumberOfTables];
+	//ULONG CallCounts[NumberOfTables][NumberOfEntries];
+	} SYSTEM_CALL_COUNT_INFORMATION, *PSYSTEM_CALL_COUNT_INFORMATION;
+
+	typedef struct _SYSTEM_CRASH_DUMP_INFORMATION {
+	HANDLE CrashDumpSection;
+	} SYSTEM_CRASH_DUMP_INFORMATION, *PSYSTEM_CRASH_DUMP_INFORMATION;
+
+	typedef struct _SYSTEM_EXCEPTION_INFORMATION {
+	ULONG AlignmentFixupCount;
+	ULONG ExceptionDispatchCount;
+	ULONG FloatingEmulationCount;
+	ULONG ByteWordEmulationCount;
+	} SYSTEM_EXCEPTION_INFORMATION, *PSYSTEM_EXCEPTION_INFORMATION;
+
+	typedef struct _SYSTEM_CRASH_STATE_INFORMATION {
+	ULONG ValidCrashDump;
+	} SYSTEM_CRASH_STATE_INFORMATION, *PSYSTEM_CRASH_STATE_INFORMATION;
+
+	typedef struct _SYSTEM_KERNEL_DEBUGGER_INFORMATION {
+	BOOLEAN KernelDebuggerEnabled;
+	BOOLEAN KernelDebuggerNotPresent;
+	} SYSTEM_KERNEL_DEBUGGER_INFORMATION, *PSYSTEM_KERNEL_DEBUGGER_INFORMATION;
+
+	typedef struct _SYSTEM_REGISTRY_QUOTA_INFORMATION {
+	ULONG RegistryQuotaAllowed;
+	ULONG RegistryQuotaUsed;
+	ULONG PagedPoolSize;
+	} SYSTEM_REGISTRY_QUOTA_INFORMATION, *PSYSTEM_REGISTRY_QUOTA_INFORMATION;
+	*/
+
+	typedef struct _SYSTEM_GDI_DRIVER_INFORMATION {
+		UNICODE_STRING DriverName;
+		PVOID ImageAddress;
+		PVOID SectionPointer;
+		PVOID EntryPoint;
+		PIMAGE_EXPORT_DIRECTORY ExportSectionPointer;
+		ULONG ImageLength;
+	} SYSTEM_GDI_DRIVER_INFORMATION, * PSYSTEM_GDI_DRIVER_INFORMATION;
+
+	typedef struct _SYSTEM_BOOT_ENVIRONMENT_INFORMATION {
+		GUID  CurrentBootGuid;
+		ULONG Unknown;
+	} SYSTEM_BOOT_ENVIRONMENT_INFORMATION, * PSYSTEM_BOOT_ENVIRONMENT_INFORMATION;
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQuerySystemInformation(
+			IN SYSTEM_INFORMATION_CLASS SystemInformationClass,
+			OUT PVOID SystemInformation,
+			IN ULONG SystemInformationLength,
+			OUT PULONG ReturnLength
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwQuerySystemInformation(
+			IN SYSTEM_INFORMATION_CLASS SystemInformationClass,
+			OUT PVOID SystemInformation,
+			IN ULONG SystemInformationLength,
+			OUT PULONG ReturnLength
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtSetSystemInformation(
+			IN SYSTEM_INFORMATION_CLASS SystemInformationClass,
+			IN PVOID SystemInformation,
+			IN ULONG SystemInformationLength
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwSetSystemInformation(
+			IN SYSTEM_INFORMATION_CLASS SystemInformationClass,
+			IN PVOID SystemInformation,
+			IN ULONG SystemInformationLength
+		);
+
+	//------------------------------------------------------------------------------
+	// Shutdown system
+
+	typedef enum _SHUTDOWN_ACTION
+	{
+		ShutdownNoReboot,
+		ShutdownReboot,
+		ShutdownPowerOff
+
+	} SHUTDOWN_ACTION, * PSHUTDOWN_ACTION;
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtShutdownSystem(
+			IN SHUTDOWN_ACTION Action
+		);
+
+	typedef struct _SYSTEM_HANDLE
+	{
+		ULONG ProcessId;
+		BYTE ObjectTypeNumber;
+		BYTE Flags;
+		USHORT Handle;
+		PVOID Object;
+		ACCESS_MASK GrantedAccess;
+	} SYSTEM_HANDLE, * PSYSTEM_HANDLE;
+
+	typedef struct _SYSTEM_HANDLE_INFORMATION
+	{
+		ULONG HandleCount;
+		SYSTEM_HANDLE Handles[1];
+	} SYSTEM_HANDLE_INFORMATION, * PSYSTEM_HANDLE_INFORMATION;
+
+	//-----------------------------------------------------------------------------
+	// File functions
+
+#ifndef OLD_DOS_VOLID
+#define OLD_DOS_VOLID   0x00000008
+#endif
+
+#ifndef FILE_SUPERSEDE
+#define FILE_SUPERSEDE                  0x00000000
+#define FILE_OPEN                       0x00000001
+#define FILE_CREATE                     0x00000002
+#define FILE_OPEN_IF                    0x00000003
+#define FILE_OVERWRITE                  0x00000004
+#define FILE_OVERWRITE_IF               0x00000005
+#define FILE_MAXIMUM_DISPOSITION        0x00000005
+#endif  // File create flags
+
+
+	// Define the create/open option flags
+#ifndef FILE_DIRECTORY_FILE
+#define FILE_DIRECTORY_FILE                     0x00000001
+#define FILE_WRITE_THROUGH                      0x00000002
+#define FILE_SEQUENTIAL_ONLY                    0x00000004
+#define FILE_NO_INTERMEDIATE_BUFFERING          0x00000008
+#define FILE_SYNCHRONOUS_IO_ALERT               0x00000010
+#define FILE_SYNCHRONOUS_IO_NONALERT            0x00000020
+#define FILE_NON_DIRECTORY_FILE                 0x00000040
+#define FILE_CREATE_TREE_CONNECTION             0x00000080
+#define FILE_COMPLETE_IF_OPLOCKED               0x00000100
+#define FILE_NO_EA_KNOWLEDGE                    0x00000200
+#define FILE_OPEN_FOR_RECOVERY                  0x00000400
+#define FILE_RANDOM_ACCESS                      0x00000800
+#define FILE_DELETE_ON_CLOSE                    0x00001000
+#define FILE_OPEN_BY_FILE_ID                    0x00002000
+#define FILE_OPEN_FOR_BACKUP_INTENT             0x00004000
+#define FILE_NO_COMPRESSION                     0x00008000
+#define FILE_OPEN_REQUIRING_OPLOCK              0x00010000
+#define FILE_DISALLOW_EXCLUSIVE                 0x00020000
+#define FILE_RESERVE_OPFILTER                   0x00100000
+#define FILE_OPEN_REPARSE_POINT                 0x00200000
+#define FILE_OPEN_NO_RECALL                     0x00400000
+#define FILE_OPEN_FOR_FREE_SPACE_QUERY          0x00800000
+#endif // FILE_DIRECTORY_FILE
+
+
+	//
+	// Define the I/O status information return values for NtCreateFile/NtOpenFile
+	//
+
+#ifndef FILE_SUPERSEDED
+#define FILE_SUPERSEDED                 0x00000000
+#define FILE_OPENED                     0x00000001
+#define FILE_CREATED                    0x00000002
+#define FILE_OVERWRITTEN                0x00000003
+#define FILE_EXISTS                     0x00000004
+#define FILE_DOES_NOT_EXIST             0x00000005
+#endif
+
+
+#ifndef PIO_APC_ROUTINE_DEFINED
+	typedef
+		VOID
+		(NTAPI* PIO_APC_ROUTINE) (
+			IN PVOID ApcContext,
+			IN PIO_STATUS_BLOCK IoStatusBlock,
+			IN ULONG Reserved
+			);
+#define PIO_APC_ROUTINE_DEFINED
+#endif  // PIO_APC_ROUTINE_DEFINED
+
+	typedef enum _TIMER_INFORMATION_CLASS
+	{
+		TimerBasicInformation
+	} TIMER_INFORMATION_CLASS;
+
+	typedef
+		VOID
+		(NTAPI*
+			PTIMER_APC_ROUTINE)(
+				_In_ PVOID TimerContext,
+				_In_ ULONG TimerLowValue,
+				_In_ LONG TimerHighValue
+				);
+
+	typedef enum _TIMER_SET_INFORMATION_CLASS
+	{
+		TimerSetCoalescableTimer,
+		MaxTimerInfoClass
+	} TIMER_SET_INFORMATION_CLASS;
+
+	typedef struct _THREAD_BASIC_INFORMATION {
+		NTSTATUS                ExitStatus;
+		PVOID                   TebBaseAddress;
+		CLIENT_ID               ClientId;
+		KAFFINITY               AffinityMask;
+		KPRIORITY               Priority;
+		KPRIORITY               BasePriority;
+	} THREAD_BASIC_INFORMATION, * PTHREAD_BASIC_INFORMATION;
+
+	typedef enum _FILE_INFORMATION_CLASS
+	{
+		FileDirectoryInformation = 1,
+		FileFullDirectoryInformation,           // 0x02
+		FileBothDirectoryInformation,           // 0x03
+		FileBasicInformation,                   // 0x04  wdm
+		FileStandardInformation,                // 0x05  wdm
+		FileInternalInformation,                // 0x06
+		FileEaInformation,                      // 0x07
+		FileAccessInformation,                  // 0x08
+		FileNameInformation,                    // 0x09
+		FileRenameInformation,                  // 0x0A
+		FileLinkInformation,                    // 0x0B
+		FileNamesInformation,                   // 0x0C
+		FileDispositionInformation,             // 0x0D
+		FilePositionInformation,                // 0x0E wdm
+		FileFullEaInformation,                  // 0x0F
+		FileModeInformation,                    // 0x10
+		FileAlignmentInformation,               // 0x11
+		FileAllInformation,                     // 0x12
+		FileAllocationInformation,              // 0x13
+		FileEndOfFileInformation,               // 0x14 wdm
+		FileAlternateNameInformation,           // 0x15
+		FileStreamInformation,                  // 0x16
+		FilePipeInformation,                    // 0x17
+		FilePipeLocalInformation,               // 0x18
+		FilePipeRemoteInformation,              // 0x19
+		FileMailslotQueryInformation,           // 0x1A
+		FileMailslotSetInformation,             // 0x1B
+		FileCompressionInformation,             // 0x1C
+		FileObjectIdInformation,                // 0x1D
+		FileCompletionInformation,              // 0x1E
+		FileMoveClusterInformation,             // 0x1F
+		FileQuotaInformation,                   // 0x20
+		FileReparsePointInformation,            // 0x21
+		FileNetworkOpenInformation,             // 0x22
+		FileAttributeTagInformation,            // 0x23
+		FileTrackingInformation,                // 0x24
+		FileIdBothDirectoryInformation,         // 0x25
+		FileIdFullDirectoryInformation,         // 0x26
+		FileValidDataLengthInformation,         // 0x27
+		FileShortNameInformation,               // 0x28
+		FileIoCompletionNotificationInformation,// 0x29
+		FileIoStatusBlockRangeInformation,      // 0x2A
+		FileIoPriorityHintInformation,          // 0x2B
+		FileSfioReserveInformation,             // 0x2C
+		FileSfioVolumeInformation,              // 0x2D
+		FileHardLinkInformation,                // 0x2E
+		FileProcessIdsUsingFileInformation,     // 0x2F
+		FileNormalizedNameInformation,          // 0x30
+		FileNetworkPhysicalNameInformation,     // 0x31 
+		FileIdGlobalTxDirectoryInformation,     // 0x32
+		FileIsRemoteDeviceInformation,          // 0x33
+		FileAttributeCacheInformation,          // 0x34
+		FileNumaNodeInformation,                // 0x35
+		FileStandardLinkInformation,            // 0x36
+		FileRemoteProtocolInformation,          // 0x37
+		FileMaximumInformation
+	} FILE_INFORMATION_CLASS, * PFILE_INFORMATION_CLASS;
+
+
+	typedef struct _FILE_DIRECTORY_INFORMATION {
+		ULONG NextEntryOffset;
+		ULONG FileIndex;
+		LARGE_INTEGER CreationTime;
+		LARGE_INTEGER LastAccessTime;
+		LARGE_INTEGER LastWriteTime;
+		LARGE_INTEGER ChangeTime;
+		LARGE_INTEGER EndOfFile;
+		LARGE_INTEGER AllocationSize;
+		ULONG FileAttributes;
+		ULONG FileNameLength;
+		WCHAR FileName[1];
+	} FILE_DIRECTORY_INFORMATION, * PFILE_DIRECTORY_INFORMATION;
+
+
+	typedef struct _FILE_FULL_DIR_INFORMATION {
+		ULONG NextEntryOffset;
+		ULONG FileIndex;
+		LARGE_INTEGER CreationTime;
+		LARGE_INTEGER LastAccessTime;
+		LARGE_INTEGER LastWriteTime;
+		LARGE_INTEGER ChangeTime;
+		LARGE_INTEGER EndOfFile;
+		LARGE_INTEGER AllocationSize;
+		ULONG FileAttributes;
+		ULONG FileNameLength;
+		ULONG EaSize;
+		WCHAR FileName[1];
+	} FILE_FULL_DIR_INFORMATION, * PFILE_FULL_DIR_INFORMATION;
+
+
+	typedef struct _FILE_BOTH_DIR_INFORMATION {
+		ULONG NextEntryOffset;
+		ULONG FileIndex;
+		LARGE_INTEGER CreationTime;
+		LARGE_INTEGER LastAccessTime;
+		LARGE_INTEGER LastWriteTime;
+		LARGE_INTEGER ChangeTime;
+		LARGE_INTEGER EndOfFile;
+		LARGE_INTEGER AllocationSize;
+		ULONG FileAttributes;
+		ULONG FileNameLength;
+		ULONG EaSize;
+		CCHAR ShortNameLength;
+		WCHAR ShortName[12];
+		WCHAR FileName[1];
+	} FILE_BOTH_DIR_INFORMATION, * PFILE_BOTH_DIR_INFORMATION;
+
+
+	typedef struct _FILE_BASIC_INFORMATION {
+		LARGE_INTEGER CreationTime;
+		LARGE_INTEGER LastAccessTime;
+		LARGE_INTEGER LastWriteTime;
+		LARGE_INTEGER ChangeTime;
+		ULONG FileAttributes;
+	} FILE_BASIC_INFORMATION, * PFILE_BASIC_INFORMATION;
+
+
+	typedef struct _FILE_STANDARD_INFORMATION {
+		LARGE_INTEGER AllocationSize;
+		LARGE_INTEGER EndOfFile;
+		ULONG NumberOfLinks;
+		BOOLEAN DeletePending;
+		BOOLEAN Directory;
+	} FILE_STANDARD_INFORMATION, * PFILE_STANDARD_INFORMATION;
+
+
+	typedef struct _FILE_INTERNAL_INFORMATION {
+		LARGE_INTEGER IndexNumber;
+	} FILE_INTERNAL_INFORMATION, * PFILE_INTERNAL_INFORMATION;
+
+
+	typedef struct _FILE_EA_INFORMATION {
+		ULONG EaSize;
+	} FILE_EA_INFORMATION, * PFILE_EA_INFORMATION;
+
+
+	typedef struct _FILE_ACCESS_INFORMATION {
+		ACCESS_MASK AccessFlags;
+	} FILE_ACCESS_INFORMATION, * PFILE_ACCESS_INFORMATION;
+
+
+	typedef struct _FILE_NAME_INFORMATION {
+		ULONG FileNameLength;
+		WCHAR FileName[1];
+	} FILE_NAME_INFORMATION, * PFILE_NAME_INFORMATION;
+
+
+	typedef struct _FILE_RENAME_INFORMATION {
+		BOOLEAN ReplaceIfExists;
+		HANDLE RootDirectory;
+		ULONG FileNameLength;
+		WCHAR FileName[1];
+	} FILE_RENAME_INFORMATION, * PFILE_RENAME_INFORMATION;
+
+
+	typedef struct _FILE_NAMES_INFORMATION {
+		ULONG NextEntryOffset;
+		ULONG FileIndex;
+		ULONG FileNameLength;
+		WCHAR FileName[1];
+	} FILE_NAMES_INFORMATION, * PFILE_NAMES_INFORMATION;
+
+
+	typedef struct _FILE_DISPOSITION_INFORMATION {
+		BOOLEAN DeleteFile;
+	} FILE_DISPOSITION_INFORMATION, * PFILE_DISPOSITION_INFORMATION;
+
+
+	typedef struct _FILE_POSITION_INFORMATION {
+		LARGE_INTEGER CurrentByteOffset;
+	} FILE_POSITION_INFORMATION, * PFILE_POSITION_INFORMATION;
+
+
+	typedef struct _FILE_FULL_EA_INFORMATION {
+		ULONG NextEntryOffset;
+		UCHAR Flags;
+		UCHAR EaNameLength;
+		USHORT EaValueLength;
+		CHAR EaName[1];
+	} FILE_FULL_EA_INFORMATION, * PFILE_FULL_EA_INFORMATION;
+
+
+	typedef struct _FILE_MODE_INFORMATION {
+		ULONG Mode;
+	} FILE_MODE_INFORMATION, * PFILE_MODE_INFORMATION;
+
+
+	typedef struct _FILE_ALIGNMENT_INFORMATION {
+		ULONG AlignmentRequirement;
+	} FILE_ALIGNMENT_INFORMATION, * PFILE_ALIGNMENT_INFORMATION;
+
+
+	typedef struct _FILE_ALL_INFORMATION {
+		FILE_BASIC_INFORMATION BasicInformation;
+		FILE_STANDARD_INFORMATION StandardInformation;
+		FILE_INTERNAL_INFORMATION InternalInformation;
+		FILE_EA_INFORMATION EaInformation;
+		FILE_ACCESS_INFORMATION AccessInformation;
+		FILE_POSITION_INFORMATION PositionInformation;
+		FILE_MODE_INFORMATION ModeInformation;
+		FILE_ALIGNMENT_INFORMATION AlignmentInformation;
+		FILE_NAME_INFORMATION NameInformation;
+	} FILE_ALL_INFORMATION, * PFILE_ALL_INFORMATION;
+
+
+	typedef struct _FILE_ALLOCATION_INFORMATION {
+		LARGE_INTEGER AllocationSize;
+	} FILE_ALLOCATION_INFORMATION, * PFILE_ALLOCATION_INFORMATION;
+
+
+	typedef struct _FILE_END_OF_FILE_INFORMATION {
+		LARGE_INTEGER EndOfFile;
+	} FILE_END_OF_FILE_INFORMATION, * PFILE_END_OF_FILE_INFORMATION;
+
+
+	typedef struct _FILE_STREAM_INFORMATION {
+		ULONG NextEntryOffset;
+		ULONG StreamNameLength;
+		LARGE_INTEGER StreamSize;
+		LARGE_INTEGER StreamAllocationSize;
+		WCHAR StreamName[1];
+	} FILE_STREAM_INFORMATION, * PFILE_STREAM_INFORMATION;
+
+	typedef struct _FILE_PIPE_INFORMATION {
+		ULONG ReadMode;
+		ULONG CompletionMode;
+	} FILE_PIPE_INFORMATION, * PFILE_PIPE_INFORMATION;
+
+
+	typedef struct _FILE_PIPE_LOCAL_INFORMATION {
+		ULONG NamedPipeType;
+		ULONG NamedPipeConfiguration;
+		ULONG MaximumInstances;
+		ULONG CurrentInstances;
+		ULONG InboundQuota;
+		ULONG ReadDataAvailable;
+		ULONG OutboundQuota;
+		ULONG WriteQuotaAvailable;
+		ULONG NamedPipeState;
+		ULONG NamedPipeEnd;
+	} FILE_PIPE_LOCAL_INFORMATION, * PFILE_PIPE_LOCAL_INFORMATION;
+
+
+	typedef struct _FILE_PIPE_REMOTE_INFORMATION {
+		LARGE_INTEGER CollectDataTime;
+		ULONG MaximumCollectionCount;
+	} FILE_PIPE_REMOTE_INFORMATION, * PFILE_PIPE_REMOTE_INFORMATION;
+
+
+	typedef struct _FILE_MAILSLOT_QUERY_INFORMATION {
+		ULONG MaximumMessageSize;
+		ULONG MailslotQuota;
+		ULONG NextMessageSize;
+		ULONG MessagesAvailable;
+		LARGE_INTEGER ReadTimeout;
+	} FILE_MAILSLOT_QUERY_INFORMATION, * PFILE_MAILSLOT_QUERY_INFORMATION;
+
+
+	typedef struct _FILE_MAILSLOT_SET_INFORMATION {
+		PLARGE_INTEGER ReadTimeout;
+	} FILE_MAILSLOT_SET_INFORMATION, * PFILE_MAILSLOT_SET_INFORMATION;
+
+
+	typedef struct _FILE_COMPRESSION_INFORMATION {
+		LARGE_INTEGER CompressedFileSize;
+		USHORT CompressionFormat;
+		UCHAR CompressionUnitShift;
+		UCHAR ChunkShift;
+		UCHAR ClusterShift;
+		UCHAR Reserved[3];
+	} FILE_COMPRESSION_INFORMATION, * PFILE_COMPRESSION_INFORMATION;
+
+
+	typedef struct _FILE_LINK_INFORMATION {
+		BOOLEAN ReplaceIfExists;
+		HANDLE RootDirectory;
+		ULONG FileNameLength;
+		WCHAR FileName[1];
+	} FILE_LINK_INFORMATION, * PFILE_LINK_INFORMATION;
+
+
+	typedef struct _FILE_OBJECTID_INFORMATION
+	{
+		LONGLONG FileReference;
+		UCHAR ObjectId[16];
+		union {
+			struct {
+				UCHAR BirthVolumeId[16];
+				UCHAR BirthObjectId[16];
+				UCHAR DomainId[16];
+			};
+			UCHAR ExtendedInfo[48];
+		};
+	} FILE_OBJECTID_INFORMATION, * PFILE_OBJECTID_INFORMATION;
+
+
+	typedef struct _FILE_COMPLETION_INFORMATION {
+		HANDLE Port;
+		PVOID Key;
+	} FILE_COMPLETION_INFORMATION, * PFILE_COMPLETION_INFORMATION;
+
+
+	typedef struct _FILE_MOVE_CLUSTER_INFORMATION {
+		ULONG ClusterCount;
+		HANDLE RootDirectory;
+		ULONG FileNameLength;
+		WCHAR FileName[1];
+	} FILE_MOVE_CLUSTER_INFORMATION, * PFILE_MOVE_CLUSTER_INFORMATION;
+
+
+	typedef struct _FILE_NETWORK_OPEN_INFORMATION {
+		LARGE_INTEGER CreationTime;
+		LARGE_INTEGER LastAccessTime;
+		LARGE_INTEGER LastWriteTime;
+		LARGE_INTEGER ChangeTime;
+		LARGE_INTEGER AllocationSize;
+		LARGE_INTEGER EndOfFile;
+		ULONG FileAttributes;
+	} FILE_NETWORK_OPEN_INFORMATION, * PFILE_NETWORK_OPEN_INFORMATION;
+
+
+	typedef struct _FILE_ATTRIBUTE_TAG_INFORMATION {
+		ULONG FileAttributes;
+		ULONG ReparseTag;
+	} FILE_ATTRIBUTE_TAG_INFORMATION, * PFILE_ATTRIBUTE_TAG_INFORMATION;
+
+
+	typedef struct _FILE_TRACKING_INFORMATION {
+		HANDLE DestinationFile;
+		ULONG ObjectInformationLength;
+		CHAR ObjectInformation[1];
+	} FILE_TRACKING_INFORMATION, * PFILE_TRACKING_INFORMATION;
+
+
+	typedef struct _FILE_REPARSE_POINT_INFORMATION {
+		LONGLONG FileReference;
+		ULONG Tag;
+	} FILE_REPARSE_POINT_INFORMATION, * PFILE_REPARSE_POINT_INFORMATION;
+
+
+	typedef struct _FILE_QUOTA_INFORMATION {
+		ULONG NextEntryOffset;
+		ULONG SidLength;
+		LARGE_INTEGER ChangeTime;
+		LARGE_INTEGER QuotaUsed;
+		LARGE_INTEGER QuotaThreshold;
+		LARGE_INTEGER QuotaLimit;
+		SID Sid;
+	} FILE_QUOTA_INFORMATION, * PFILE_QUOTA_INFORMATION;
+
+
+	typedef struct _FILE_ID_BOTH_DIR_INFORMATION {
+		ULONG NextEntryOffset;
+		ULONG FileIndex;
+		LARGE_INTEGER CreationTime;
+		LARGE_INTEGER LastAccessTime;
+		LARGE_INTEGER LastWriteTime;
+		LARGE_INTEGER ChangeTime;
+		LARGE_INTEGER EndOfFile;
+		LARGE_INTEGER AllocationSize;
+		ULONG FileAttributes;
+		ULONG FileNameLength;
+		ULONG EaSize;
+		CCHAR ShortNameLength;
+		WCHAR ShortName[12];
+		LARGE_INTEGER FileId;
+		WCHAR FileName[1];
+	} FILE_ID_BOTH_DIR_INFORMATION, * PFILE_ID_BOTH_DIR_INFORMATION;
+
+
+	typedef struct _FILE_ID_FULL_DIR_INFORMATION {
+		ULONG NextEntryOffset;
+		ULONG FileIndex;
+		LARGE_INTEGER CreationTime;
+		LARGE_INTEGER LastAccessTime;
+		LARGE_INTEGER LastWriteTime;
+		LARGE_INTEGER ChangeTime;
+		LARGE_INTEGER EndOfFile;
+		LARGE_INTEGER AllocationSize;
+		ULONG FileAttributes;
+		ULONG FileNameLength;
+		ULONG EaSize;
+		LARGE_INTEGER FileId;
+		WCHAR FileName[1];
+	} FILE_ID_FULL_DIR_INFORMATION, * PFILE_ID_FULL_DIR_INFORMATION;
+
+
+	typedef struct _FILE_VALID_DATA_LENGTH_INFORMATION {
+		LARGE_INTEGER ValidDataLength;
+	} FILE_VALID_DATA_LENGTH_INFORMATION, * PFILE_VALID_DATA_LENGTH_INFORMATION;
+
+	//
+	// Don't queue an entry to an associated completion port if returning success
+	// synchronously.
+	//
+#define FILE_SKIP_COMPLETION_PORT_ON_SUCCESS    0x1
+
+	//
+	// Don't set the file handle event on IO completion.
+	//
+#define FILE_SKIP_SET_EVENT_ON_HANDLE           0x2
+
+	//
+	// Don't set user supplied event on successful fast-path IO completion.
+	//
+#define FILE_SKIP_SET_USER_EVENT_ON_FAST_IO     0x4
+
+	typedef  struct _FILE_IO_COMPLETION_NOTIFICATION_INFORMATION {
+		ULONG Flags;
+	} FILE_IO_COMPLETION_NOTIFICATION_INFORMATION, * PFILE_IO_COMPLETION_NOTIFICATION_INFORMATION;
+
+
+	typedef  struct _FILE_PROCESS_IDS_USING_FILE_INFORMATION {
+		ULONG NumberOfProcessIdsInList;
+		ULONG_PTR ProcessIdList[1];
+	} FILE_PROCESS_IDS_USING_FILE_INFORMATION, * PFILE_PROCESS_IDS_USING_FILE_INFORMATION;
+
+
+	typedef struct _FILE_IOSTATUSBLOCK_RANGE_INFORMATION {
+		PUCHAR       IoStatusBlockRange;
+		ULONG        Length;
+	} FILE_IOSTATUSBLOCK_RANGE_INFORMATION, * PFILE_IOSTATUSBLOCK_RANGE_INFORMATION;
+
+
+	typedef enum _IO_PRIORITY_HINT {
+		IoPriorityVeryLow = 0,    // Winfs promotion, defragging, content indexing and other background I/Os
+		IoPriorityLow,            // Prefetching for applications.
+		IoPriorityNormal,         // Normal I/Os
+		IoPriorityHigh,           // Used by filesystems for checkpoint I/O
+		IoPriorityCritical,       // Used by memory manager. Not available for applications.
+		MaxIoPriorityTypes
+	} IO_PRIORITY_HINT;
+
+
+	typedef struct _FILE_IO_PRIORITY_HINT_INFORMATION {
+		IO_PRIORITY_HINT   PriorityHint;
+	} FILE_IO_PRIORITY_HINT_INFORMATION, * PFILE_IO_PRIORITY_HINT_INFORMATION;
+
+
+	//
+	// Support to reserve bandwidth for a file handle.
+	//
+
+	typedef struct _FILE_SFIO_RESERVE_INFORMATION {
+		ULONG RequestsPerPeriod;
+		ULONG Period;
+		BOOLEAN RetryFailures;
+		BOOLEAN Discardable;
+		ULONG RequestSize;
+		ULONG NumOutstandingRequests;
+	} FILE_SFIO_RESERVE_INFORMATION, * PFILE_SFIO_RESERVE_INFORMATION;
+
+	//
+	// Support to query bandwidth properties of a volume.
+	//
+
+	typedef struct _FILE_SFIO_VOLUME_INFORMATION {
+		ULONG MaximumRequestsPerPeriod;
+		ULONG MinimumPeriod;
+		ULONG MinimumTransferSize;
+	} FILE_SFIO_VOLUME_INFORMATION, * PFILE_SFIO_VOLUME_INFORMATION;
+
+
+	typedef struct _FILE_LINK_ENTRY_INFORMATION {
+		ULONG NextEntryOffset;
+		LONGLONG ParentFileId;
+		ULONG FileNameLength;
+		WCHAR FileName[1];
+	} FILE_LINK_ENTRY_INFORMATION, * PFILE_LINK_ENTRY_INFORMATION;
+
+
+	typedef struct _FILE_LINKS_INFORMATION
+	{
+		ULONG BytesNeeded;
+		ULONG EntriesReturned;
+		FILE_LINK_ENTRY_INFORMATION Entry;
+	} FILE_LINKS_INFORMATION, * PFILE_LINKS_INFORMATION;
+
+	typedef struct _FILE_ID_GLOBAL_TX_DIR_INFORMATION
+	{
+		ULONG          NextEntryOffset;
+		ULONG          FileIndex;
+		LARGE_INTEGER  CreationTime;
+		LARGE_INTEGER  LastAccessTime;
+		LARGE_INTEGER  LastWriteTime;
+		LARGE_INTEGER  ChangeTime;
+		LARGE_INTEGER  EndOfFile;
+		LARGE_INTEGER  AllocationSize;
+		ULONG          FileAttributes;
+		ULONG          FileNameLength;
+		LARGE_INTEGER  FileId;
+		GUID           LockingTransactionId;
+		ULONG          TxInfoFlags;
+		WCHAR          FileName[1];
+	} FILE_ID_GLOBAL_TX_DIR_INFORMATION, * PFILE_ID_GLOBAL_TX_DIR_INFORMATION;
+
+
+	typedef struct _FILE_IS_REMOTE_DEVICE_INFORMATION
+	{
+		BOOLEAN IsRemote;
+	} FILE_IS_REMOTE_DEVICE_INFORMATION, * PFILE_IS_REMOTE_DEVICE_INFORMATION;
+
+	typedef struct _FILE_NUMA_NODE_INFORMATION {
+		USHORT NodeNumber;
+	} FILE_NUMA_NODE_INFORMATION, * PFILE_NUMA_NODE_INFORMATION;
+
+	/*
+	typedef struct _FILE_REMOTE_PROTOCOL_INFO
+	{
+	USHORT StructureVersion;
+	USHORT StructureSize;
+	ULONG  Protocol;
+	USHORT ProtocolMajorVersion;
+	USHORT ProtocolMinorVersion;
+	USHORT ProtocolRevision;
+	USHORT Reserved;
+	ULONG  Flags;
+	struct {
+	ULONG Reserved[8];
+	} GenericReserved;
+	struct {
+	ULONG Reserved[16];
+	} ProtocolSpecificReserved;
+	} FILE_REMOTE_PROTOCOL_INFO, *PFILE_REMOTE_PROTOCOL_INFO;
+	*/
+
+	typedef enum _FSINFOCLASS {
+		FileFsVolumeInformation = 1,
+		FileFsLabelInformation,                 // 0x02
+		FileFsSizeInformation,                  // 0x03
+		FileFsDeviceInformation,                // 0x04
+		FileFsAttributeInformation,             // 0x05
+		FileFsControlInformation,               // 0x06
+		FileFsFullSizeInformation,              // 0x07
+		FileFsObjectIdInformation,              // 0x08
+		FileFsDriverPathInformation,            // 0x09
+		FileFsVolumeFlagsInformation,           // 0x0A
+		FileFsMaximumInformation                // 0x0B
+	} FS_INFORMATION_CLASS, * PFS_INFORMATION_CLASS;
+
+
+	typedef struct _FILE_FS_VOLUME_INFORMATION {
+		LARGE_INTEGER VolumeCreationTime;
+		ULONG VolumeSerialNumber;
+		ULONG VolumeLabelLength;
+		BOOLEAN SupportsObjects;
+		WCHAR VolumeLabel[1];
+	} FILE_FS_VOLUME_INFORMATION, * PFILE_FS_VOLUME_INFORMATION;
+
+
+	typedef struct _FILE_FS_LABEL_INFORMATION {
+		ULONG VolumeLabelLength;
+		WCHAR VolumeLabel[1];
+	} FILE_FS_LABEL_INFORMATION, * PFILE_FS_LABEL_INFORMATION;
+
+
+	typedef struct _FILE_FS_SIZE_INFORMATION {
+		LARGE_INTEGER TotalAllocationUnits;
+		LARGE_INTEGER AvailableAllocationUnits;
+		ULONG SectorsPerAllocationUnit;
+		ULONG BytesPerSector;
+	} FILE_FS_SIZE_INFORMATION, * PFILE_FS_SIZE_INFORMATION;
+
+
+	typedef struct _FILE_FS_DEVICE_INFORMATION {
+		DEVICE_TYPE DeviceType;
+		ULONG Characteristics;
+	} FILE_FS_DEVICE_INFORMATION, * PFILE_FS_DEVICE_INFORMATION;
+
+
+	typedef struct _FILE_FS_ATTRIBUTE_INFORMATION {
+		ULONG FileSystemAttributes;
+		LONG MaximumComponentNameLength;
+		ULONG FileSystemNameLength;
+		WCHAR FileSystemName[1];
+	} FILE_FS_ATTRIBUTE_INFORMATION, * PFILE_FS_ATTRIBUTE_INFORMATION;
+
+
+	typedef struct _FILE_FS_CONTROL_INFORMATION {
+		LARGE_INTEGER FreeSpaceStartFiltering;
+		LARGE_INTEGER FreeSpaceThreshold;
+		LARGE_INTEGER FreeSpaceStopFiltering;
+		LARGE_INTEGER DefaultQuotaThreshold;
+		LARGE_INTEGER DefaultQuotaLimit;
+		ULONG FileSystemControlFlags;
+	} FILE_FS_CONTROL_INFORMATION, * PFILE_FS_CONTROL_INFORMATION;
+
+
+	typedef struct _FILE_FS_FULL_SIZE_INFORMATION {
+		LARGE_INTEGER TotalAllocationUnits;
+		LARGE_INTEGER CallerAvailableAllocationUnits;
+		LARGE_INTEGER ActualAvailableAllocationUnits;
+		ULONG SectorsPerAllocationUnit;
+		ULONG BytesPerSector;
+	} FILE_FS_FULL_SIZE_INFORMATION, * PFILE_FS_FULL_SIZE_INFORMATION;
+
+
+	typedef struct _FILE_FS_OBJECTID_INFORMATION {
+		UCHAR ObjectId[16];
+		UCHAR ExtendedInfo[48];
+	} FILE_FS_OBJECTID_INFORMATION, * PFILE_FS_OBJECTID_INFORMATION;
+
+
+	typedef struct _FILE_FS_DRIVER_PATH_INFORMATION {
+		BOOLEAN DriverInPath;
+		ULONG   DriverNameLength;
+		WCHAR   DriverName[1];
+	} FILE_FS_DRIVER_PATH_INFORMATION, * PFILE_FS_DRIVER_PATH_INFORMATION;
+
+
+	typedef struct _FILE_FS_VOLUME_FLAGS_INFORMATION {
+		ULONG Flags;
+	} FILE_FS_VOLUME_FLAGS_INFORMATION, * PFILE_FS_VOLUME_FLAGS_INFORMATION;
+
+#ifndef _MOUNTMGR_
+#define _MOUNTMGR_
+
+#if (NTDDI_VERSION >= NTDDI_WIN2K)
+
+#if defined(DEFINE_GUID)
+	DEFINE_GUID(MOUNTDEV_MOUNTED_DEVICE_GUID, 0x53F5630D, 0xB6BF, 0x11D0, 0x94, 0xF2, 0x00, 0xA0, 0xC9, 0x1E, 0xFB, 0x8B);
+#endif
+
+#define MOUNTMGR_DEVICE_NAME L"\\Device\\MountPointManager"
+#define MOUNTMGR_DOS_DEVICE_NAME L"\\\\.\\MountPointManager"
+#define MOUNTMGRCONTROLTYPE ((ULONG) 'm')
+#define MOUNTDEVCONTROLTYPE ((ULONG) 'M')
+
+#define IOCTL_MOUNTMGR_DEFINE_UNIX_DRIVE CTL_CODE(MOUNTMGRCONTROLTYPE, 32, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_MOUNTMGR_QUERY_UNIX_DRIVE  CTL_CODE(MOUNTMGRCONTROLTYPE, 33, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+	struct mountmgr_unix_drive {
+		ULONG  size;
+		ULONG  type;
+		WCHAR  letter;
+		USHORT mount_point_offset;
+		USHORT device_offset;
+	};
+
+#define IOCTL_MOUNTMGR_CREATE_POINT \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 0, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_MOUNTMGR_DELETE_POINTS \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 1, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_MOUNTMGR_QUERY_POINTS \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 2, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_MOUNTMGR_DELETE_POINTS_DBONLY \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 3, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_MOUNTMGR_NEXT_DRIVE_LETTER \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 4, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_MOUNTMGR_AUTO_DL_ASSIGNMENTS \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 5, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_MOUNTMGR_VOLUME_MOUNT_POINT_CREATED \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 6, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_MOUNTMGR_VOLUME_MOUNT_POINT_DELETED \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 7, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_MOUNTMGR_CHANGE_NOTIFY \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 8, METHOD_BUFFERED, FILE_READ_ACCESS)
+#define IOCTL_MOUNTMGR_KEEP_LINKS_WHEN_OFFLINE \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 9, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_MOUNTMGR_CHECK_UNPROCESSED_VOLUMES \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 10, METHOD_BUFFERED, FILE_READ_ACCESS)
+#define IOCTL_MOUNTMGR_VOLUME_ARRIVAL_NOTIFICATION \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 11, METHOD_BUFFERED, FILE_READ_ACCESS)
+#define IOCTL_MOUNTDEV_QUERY_DEVICE_NAME \
+  CTL_CODE(MOUNTDEVCONTROLTYPE, 2, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#define MOUNTMGR_IS_DRIVE_LETTER(s) ((s)->Length == 28 && (s)->Buffer[0] == '\\' && (s)->Buffer[1] == 'D' && \
+									 (s)->Buffer[2] == 'o' && (s)->Buffer[3] == 's' && (s)->Buffer[4] == 'D' && \
+									 (s)->Buffer[5] == 'e' && (s)->Buffer[6] == 'v' && (s)->Buffer[7] == 'i' && \
+									 (s)->Buffer[8] == 'c' && (s)->Buffer[9] == 'e' && (s)->Buffer[10] == 's' && \
+									 (s)->Buffer[11] == '\\' && (s)->Buffer[12] >= 'A' && \
+									 (s)->Buffer[12] <= 'Z' && (s)->Buffer[13] == ':')
+
+#define MOUNTMGR_IS_VOLUME_NAME(s) (((s)->Length == 96 || ((s)->Length == 98 && (s)->Buffer[48] == '\\')) && \
+									 (s)->Buffer[0] == '\\'&& ((s)->Buffer[1] == '?' || (s)->Buffer[1] == '\\') && \
+									 (s)->Buffer[2] == '?' && (s)->Buffer[3] == '\\' && (s)->Buffer[4] == 'V' && \
+									 (s)->Buffer[5] == 'o' && (s)->Buffer[6] == 'l' && (s)->Buffer[7] == 'u' && \
+									 (s)->Buffer[8] == 'm' && (s)->Buffer[9] == 'e' && (s)->Buffer[10] == '{' &&  \
+									 (s)->Buffer[19] == '-' && (s)->Buffer[24] == '-' && (s)->Buffer[29] == '-' && \
+									 (s)->Buffer[34] == '-' && (s)->Buffer[47] == '}')
+
+	typedef struct _MOUNTMGR_CREATE_POINT_INPUT {
+		USHORT SymbolicLinkNameOffset;
+		USHORT SymbolicLinkNameLength;
+		USHORT DeviceNameOffset;
+		USHORT DeviceNameLength;
+	} MOUNTMGR_CREATE_POINT_INPUT, * PMOUNTMGR_CREATE_POINT_INPUT;
+
+	typedef struct _MOUNTMGR_MOUNT_POINT {
+		ULONG SymbolicLinkNameOffset;
+		USHORT SymbolicLinkNameLength;
+		ULONG UniqueIdOffset;
+		USHORT UniqueIdLength;
+		ULONG DeviceNameOffset;
+		USHORT DeviceNameLength;
+	} MOUNTMGR_MOUNT_POINT, * PMOUNTMGR_MOUNT_POINT;
+
+	typedef struct _MOUNTMGR_MOUNT_POINTS {
+		ULONG Size;
+		ULONG NumberOfMountPoints;
+		MOUNTMGR_MOUNT_POINT MountPoints[1];
+	} MOUNTMGR_MOUNT_POINTS, * PMOUNTMGR_MOUNT_POINTS;
+
+	typedef struct _MOUNTMGR_DRIVE_LETTER_TARGET {
+		USHORT DeviceNameLength;
+		WCHAR DeviceName[1];
+	} MOUNTMGR_DRIVE_LETTER_TARGET, * PMOUNTMGR_DRIVE_LETTER_TARGET;
+
+	typedef struct _MOUNTMGR_DRIVE_LETTER_INFORMATION {
+		BOOLEAN DriveLetterWasAssigned;
+		UCHAR CurrentDriveLetter;
+	} MOUNTMGR_DRIVE_LETTER_INFORMATION, * PMOUNTMGR_DRIVE_LETTER_INFORMATION;
+
+	typedef struct _MOUNTMGR_VOLUME_MOUNT_POINT {
+		USHORT SourceVolumeNameOffset;
+		USHORT SourceVolumeNameLength;
+		USHORT TargetVolumeNameOffset;
+		USHORT TargetVolumeNameLength;
+	} MOUNTMGR_VOLUME_MOUNT_POINT, * PMOUNTMGR_VOLUME_MOUNT_POINT;
+
+	typedef struct _MOUNTMGR_CHANGE_NOTIFY_INFO {
+		ULONG EpicNumber;
+	} MOUNTMGR_CHANGE_NOTIFY_INFO, * PMOUNTMGR_CHANGE_NOTIFY_INFO;
+
+	typedef struct _MOUNTMGR_TARGET_NAME {
+		USHORT DeviceNameLength;
+		WCHAR DeviceName[1];
+	} MOUNTMGR_TARGET_NAME, * PMOUNTMGR_TARGET_NAME;
+
+	typedef struct _MOUNTDEV_NAME {
+		USHORT NameLength;
+		WCHAR Name[1];
+	} MOUNTDEV_NAME, * PMOUNTDEV_NAME;
+
+#endif /* (NTDDI_VERSION >= NTDDI_WIN2K) */
+
+#if (NTDDI_VERSION >= NTDDI_WINXP)
+
+#define IOCTL_MOUNTMGR_QUERY_DOS_VOLUME_PATH \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 12, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_MOUNTMGR_QUERY_DOS_VOLUME_PATHS \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 13, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#define MOUNTMGR_IS_DOS_VOLUME_NAME(s) (MOUNTMGR_IS_VOLUME_NAME(s) && (s)->Length == 96 && (s)->Buffer[1] == '\\')
+#define MOUNTMGR_IS_DOS_VOLUME_NAME_WB(s) (MOUNTMGR_IS_VOLUME_NAME(s) && (s)->Length == 98 && (s)->Buffer[1] == '\\')
+#define MOUNTMGR_IS_NT_VOLUME_NAME(s) ( MOUNTMGR_IS_VOLUME_NAME(s) && (s)->Length == 96 && (s)->Buffer[1] == '?')
+#define MOUNTMGR_IS_NT_VOLUME_NAME_WB(s) (MOUNTMGR_IS_VOLUME_NAME(s) && (s)->Length == 98 && (s)->Buffer[1] == '?')
+
+	typedef struct _MOUNTMGR_VOLUME_PATHS {
+		ULONG MultiSzLength;
+		WCHAR MultiSz[1];
+	} MOUNTMGR_VOLUME_PATHS, * PMOUNTMGR_VOLUME_PATHS;
+
+#endif /* (NTDDI_VERSION >= NTDDI_WINXP) */
+
+#if (NTDDI_VERSION >= NTDDI_WS03)
+
+#define IOCTL_MOUNTMGR_SCRUB_REGISTRY \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 14, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_MOUNTMGR_QUERY_AUTO_MOUNT \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 15, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_MOUNTMGR_SET_AUTO_MOUNT \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 16, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+
+	typedef enum _MOUNTMGR_AUTO_MOUNT_STATE {
+		Disabled = 0,
+		Enabled
+	} MOUNTMGR_AUTO_MOUNT_STATE;
+
+	typedef struct _MOUNTMGR_QUERY_AUTO_MOUNT {
+		MOUNTMGR_AUTO_MOUNT_STATE CurrentState;
+	} MOUNTMGR_QUERY_AUTO_MOUNT, * PMOUNTMGR_QUERY_AUTO_MOUNT;
+
+	typedef struct _MOUNTMGR_SET_AUTO_MOUNT {
+		MOUNTMGR_AUTO_MOUNT_STATE NewState;
+	} MOUNTMGR_SET_AUTO_MOUNT, * PMOUNTMGR_SET_AUTO_MOUNT;
+
+#endif /* (NTDDI_VERSION >= NTDDI_WS03) */
+
+#if (NTDDI_VERSION >= NTDDI_WIN7)
+
+#define IOCTL_MOUNTMGR_BOOT_DL_ASSIGNMENT \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 17, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_MOUNTMGR_TRACELOG_CACHE \
+  CTL_CODE(MOUNTMGRCONTROLTYPE, 18, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+#endif /* (NTDDI_VERSION >= NTDDI_WIN7) */
+
+#endif /* _MOUNTMGR_ */
+
+#define RTL_NT_PATH_NAME_TO_DOS_PATH_NAME_AMBIGUOUS   (0x00000001)
+#define RTL_NT_PATH_NAME_TO_DOS_PATH_NAME_UNC         (0x00000002)
+#define RTL_NT_PATH_NAME_TO_DOS_PATH_NAME_DRIVE       (0x00000003)
+#define RTL_NT_PATH_NAME_TO_DOS_PATH_NAME_ALREADY_DOS (0x00000004)
+
+
+	typedef struct _RTL_RELATIVE_NAME {
+		UNICODE_STRING RelativeName;
+		HANDLE         ContainingDirectory;
+		void* CurDirRef;
+	} RTL_RELATIVE_NAME, * PRTL_RELATIVE_NAME;
+	typedef struct _RTL_BUFFER
+	{
+		PUCHAR Buffer;
+		PUCHAR StaticBuffer;
+		SIZE_T Size;
+		SIZE_T StaticSize;
+		SIZE_T ReservedForAllocatedSize;
+		PVOID ReservedForIMalloc;
+	} RTL_BUFFER, * PRTL_BUFFER;
+
+	typedef struct _RTL_UNICODE_STRING_BUFFER
+	{
+		UNICODE_STRING String;
+		RTL_BUFFER ByteBuffer;
+		WCHAR MinimumStaticBufferForTerminalNul;
+	} RTL_UNICODE_STRING_BUFFER, * PRTL_UNICODE_STRING_BUFFER;
+
+
+	typedef enum _HARDERROR_RESPONSE_OPTION {
+		OptionAbortRetryIgnore,
+		OptionOk,
+		OptionOkCancel,
+		OptionRetryCancel,
+		OptionYesNo,
+		OptionYesNoCancel,
+		OptionShutdownSystem
+	} HARDERROR_RESPONSE_OPTION, * PHARDERROR_RESPONSE_OPTION;
+
+	typedef enum _HARDERROR_RESPONSE {
+		ResponseReturnToCaller,
+		ResponseNotHandled,
+		ResponseAbort,
+		ResponseCancel,
+		ResponseIgnore,
+		ResponseNo,
+		ResponseOk,
+		ResponseRetry,
+		ResponseYes
+	} HARDERROR_RESPONSE, * PHARDERROR_RESPONSE;
+
+	NTSYSAPI NTSTATUS NTAPI RtlNtPathNameToDosPathName
+	(
+		ULONG Flags,
+		PRTL_UNICODE_STRING_BUFFER Path,
+		PULONG Type,
+		PULONG Unknown4);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlDosSearchPath_U(
+			IN PCWSTR Path,
+			IN PCWSTR FileName,
+			IN PCWSTR Extension,
+			IN ULONG BufferSize,
+			OUT PWSTR Buffer,
+			OUT PWSTR* PartName
+		);
+
+	NTSYSAPI WCHAR NTAPI RtlUpcaseUnicodeChar(
+		WCHAR SourceCharacter
+	);
+
+	NTSYSAPI WCHAR NTAPI RtlDowncaseUnicodeChar(
+		WCHAR SourceCharacter
+	);
+
+	NTSYSAPI
+		PIMAGE_NT_HEADERS
+		NTAPI
+		RtlImageNtHeader(
+			IN PVOID ModuleAddress);
+
+	NTSYSAPI NTSTATUS NTAPI NtFlushInstructionCache(
+		_In_ HANDLE 	ProcessHandle,
+		_In_ PVOID 	BaseAddress,
+		_In_ ULONG 	NumberOfBytesToFlush
+	);
+
+	NTSTATUS NTAPI NtRaiseHardError(IN NTSTATUS ErrorStatus,
+		IN ULONG NumberOfParameters,
+		IN ULONG UnicodeStringParameterMask,
+		IN PULONG_PTR Parameters,
+		IN ULONG ValidResponseOptions,
+		OUT PULONG Response);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtCreateFile(
+			OUT PHANDLE FileHandle,
+			IN  ACCESS_MASK DesiredAccess,
+			IN  POBJECT_ATTRIBUTES ObjectAttributes,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN  PLARGE_INTEGER AllocationSize,
+			IN  ULONG FileAttributes,
+			IN  ULONG ShareAccess,
+			IN  ULONG CreateDisposition,
+			IN  ULONG CreateOptions,
+			IN  PVOID EaBuffer,
+			IN  ULONG EaLength);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwCreateFile(
+			OUT PHANDLE FileHandle,
+			IN  ACCESS_MASK DesiredAccess,
+			IN  POBJECT_ATTRIBUTES ObjectAttributes,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN  PLARGE_INTEGER AllocationSize,
+			IN  ULONG FileAttributes,
+			IN  ULONG ShareAccess,
+			IN  ULONG CreateDisposition,
+			IN  ULONG CreateOptions,
+			IN  PVOID EaBuffer,
+			IN  ULONG EaLength);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtOpenFile(
+			OUT PHANDLE FileHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN ULONG ShareAccess,
+			IN ULONG OpenOptions
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwOpenFile(
+			OUT PHANDLE FileHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN ULONG ShareAccess,
+			IN ULONG OpenOptions
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQueryAttributesFile(
+			IN POBJECT_ATTRIBUTES ObjectAttributes,
+			OUT PFILE_BASIC_INFORMATION FileInformation
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwQueryAttributesFile(
+			IN POBJECT_ATTRIBUTES ObjectAttributes,
+			OUT PFILE_BASIC_INFORMATION FileInformation
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQueryInformationFile(
+			IN HANDLE FileHandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			OUT PVOID FileInformation,
+			IN ULONG Length,
+			IN FILE_INFORMATION_CLASS FileInformationClass
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwQueryInformationFile(
+			IN HANDLE FileHandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			OUT PVOID FileInformation,
+			IN ULONG Length,
+			IN FILE_INFORMATION_CLASS FileInformationClass
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQueryDirectoryFile(
+			IN HANDLE FileHandle,
+			IN HANDLE Event OPTIONAL,
+			IN PIO_APC_ROUTINE ApcRoutine OPTIONAL,
+			IN PVOID ApcContext OPTIONAL,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			OUT PVOID FileInformation,
+			IN ULONG Length,
+			IN FILE_INFORMATION_CLASS FileInformationClass,
+			IN BOOLEAN ReturnSingleEntry,
+			IN PUNICODE_STRING FileName OPTIONAL,
+			IN BOOLEAN RestartScan
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwQueryDirectoryFile(
+			IN HANDLE FileHandle,
+			IN HANDLE Event OPTIONAL,
+			IN PIO_APC_ROUTINE ApcRoutine OPTIONAL,
+			IN PVOID ApcContext OPTIONAL,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			OUT PVOID FileInformation,
+			IN ULONG Length,
+			IN FILE_INFORMATION_CLASS FileInformationClass,
+			IN BOOLEAN ReturnSingleEntry,
+			IN PUNICODE_STRING FileName OPTIONAL,
+			IN BOOLEAN RestartScan
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQueryVolumeInformationFile(
+			IN HANDLE FileHandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			OUT PVOID FsInformation,
+			IN ULONG Length,
+			IN FS_INFORMATION_CLASS FsInformationClass
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwQueryVolumeInformationFile(
+			IN HANDLE FileHandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			OUT PVOID FsInformation,
+			IN ULONG Length,
+			IN FS_INFORMATION_CLASS FsInformationClass
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtSetInformationFile(
+			IN HANDLE FileHandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN PVOID FileInformation,
+			IN ULONG Length,
+			IN FILE_INFORMATION_CLASS FileInformationClass
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwSetInformationFile(
+			IN HANDLE FileHandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN PVOID FileInformation,
+			IN ULONG Length,
+			IN FILE_INFORMATION_CLASS FileInformationClass
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtSetVolumeInformationFile(
+			IN HANDLE FileHandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			OUT PVOID FsInformation,
+			IN ULONG Length,
+			IN FS_INFORMATION_CLASS FsInformationClass
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwSetVolumeInformationFile(
+			IN HANDLE FileHandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			OUT PVOID FsInformation,
+			IN ULONG Length,
+			IN FS_INFORMATION_CLASS FsInformationClass
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQueryEaFile(
+			IN  HANDLE FileHandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			OUT PVOID Buffer,
+			IN  ULONG Length,
+			IN  BOOLEAN ReturnSingleEntry,
+			IN  PVOID EaList OPTIONAL,
+			IN  ULONG EaListLength,
+			IN  PULONG EaIndex OPTIONAL,
+			IN  BOOLEAN RestartScan);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwQueryEaFile(
+			IN  HANDLE FileHandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			OUT PVOID Buffer,
+			IN  ULONG Length,
+			IN  BOOLEAN ReturnSingleEntry,
+			IN  PVOID EaList OPTIONAL,
+			IN  ULONG EaListLength,
+			IN  PULONG EaIndex OPTIONAL,
+			IN  BOOLEAN RestartScan);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtSetEaFile(
+			IN  HANDLE FileHandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN  PVOID Buffer,
+			IN  ULONG Length);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwSetEaFile(
+			IN  HANDLE FileHandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN  PVOID Buffer,
+			IN  ULONG Length);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtReadFile(
+			IN HANDLE FileHandle,
+			IN HANDLE Event OPTIONAL,
+			IN PIO_APC_ROUTINE ApcRoutine OPTIONAL,
+			IN PVOID ApcContext OPTIONAL,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			OUT PVOID Buffer,
+			IN ULONG Length,
+			IN PLARGE_INTEGER ByteOffset OPTIONAL,
+			IN PULONG Key OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwReadFile(
+			IN HANDLE FileHandle,
+			IN HANDLE Event OPTIONAL,
+			IN PIO_APC_ROUTINE ApcRoutine OPTIONAL,
+			IN PVOID ApcContext OPTIONAL,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			OUT PVOID Buffer,
+			IN ULONG Length,
+			IN PLARGE_INTEGER ByteOffset OPTIONAL,
+			IN PULONG Key OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtWriteFile(
+			IN HANDLE FileHandle,
+			IN HANDLE Event OPTIONAL,
+			IN PIO_APC_ROUTINE ApcRoutine OPTIONAL,
+			IN PVOID ApcContext OPTIONAL,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN PVOID Buffer,
+			IN ULONG Length,
+			IN PLARGE_INTEGER ByteOffset OPTIONAL,
+			IN PULONG Key OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwWriteFile(
+			IN HANDLE FileHandle,
+			IN HANDLE Event OPTIONAL,
+			IN PIO_APC_ROUTINE ApcRoutine OPTIONAL,
+			IN PVOID ApcContext OPTIONAL,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN PVOID Buffer,
+			IN ULONG Length,
+			IN PLARGE_INTEGER ByteOffset OPTIONAL,
+			IN PULONG Key OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtDeleteFile(
+			IN POBJECT_ATTRIBUTES ObjectAttributes
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwDeleteFile(
+			IN POBJECT_ATTRIBUTES ObjectAttributes
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtFlushBuffersFile(
+			IN HANDLE FileHandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwFlushBuffersFile(
+			IN HANDLE FileHandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtDeviceIoControlFile(
+			IN  HANDLE FileHandle,
+			IN  HANDLE Event,
+			IN  PIO_APC_ROUTINE ApcRoutine,
+			IN  PVOID ApcContext,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN  ULONG IoControlCode,
+			IN  PVOID InputBuffer,
+			IN  ULONG InputBufferLength,
+			IN  PVOID OutputBuffer,
+			IN  ULONG OutputBufferLength
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwDeviceIoControlFile(
+			IN  HANDLE FileHandle,
+			IN  HANDLE Event,
+			IN  PIO_APC_ROUTINE ApcRoutine,
+			IN  PVOID ApcContext,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN  ULONG IoControlCode,
+			IN  PVOID InputBuffer,
+			IN  ULONG InputBufferLength,
+			IN  PVOID OutputBuffer,
+			IN  ULONG OutputBufferLength
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtFsControlFile(
+			IN  HANDLE FileHandle,
+			IN  HANDLE Event,
+			IN  PIO_APC_ROUTINE ApcRoutine,
+			IN  PVOID ApcContext,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN  ULONG FsControlCode,
+			IN  PVOID InputBuffer,
+			IN  ULONG InputBufferLength,
+			IN  PVOID OutputBuffer,
+			IN  ULONG OutputBufferLength
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwFsControlFile(
+			IN  HANDLE FileHandle,
+			IN  HANDLE Event,
+			IN  PIO_APC_ROUTINE ApcRoutine,
+			IN  PVOID ApcContext,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN  ULONG FsControlCode,
+			IN  PVOID InputBuffer,
+			IN  ULONG InputBufferLength,
+			IN  PVOID OutputBuffer,
+			IN  ULONG OutputBufferLength
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtCancelIoFile(
+			IN HANDLE Filehandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwCancelIoFile(
+			IN HANDLE Filehandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtLockFile(
+			IN HANDLE FileHandle,
+			IN HANDLE Event OPTIONAL,
+			IN PIO_APC_ROUTINE ApcRoutine OPTIONAL,
+			IN PVOID ApcContext OPTIONAL,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN PLARGE_INTEGER ByteOffset,
+			IN PLARGE_INTEGER Length,
+			IN ULONG Key,
+			IN BOOLEAN FailImmediately,
+			IN BOOLEAN ExclusiveLock
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwLockFile(
+			IN HANDLE FileHandle,
+			IN HANDLE Event OPTIONAL,
+			IN PIO_APC_ROUTINE ApcRoutine OPTIONAL,
+			IN PVOID ApcContext OPTIONAL,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN PLARGE_INTEGER ByteOffset,
+			IN PLARGE_INTEGER Length,
+			IN ULONG Key,
+			IN BOOLEAN FailImmediately,
+			IN BOOLEAN ExclusiveLock
+		);
+
+
+	NTSTATUS
+		NtUnlockFile(
+			IN HANDLE FileHandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN PLARGE_INTEGER ByteOffset,
+			IN PLARGE_INTEGER Length,
+			IN ULONG Key
+		);
+
+
+	NTSTATUS
+		ZwUnlockFile(
+			IN HANDLE FileHandle,
+			OUT PIO_STATUS_BLOCK IoStatusBlock,
+			IN PLARGE_INTEGER ByteOffset,
+			IN PLARGE_INTEGER Length,
+			IN ULONG Key
+		);
+
+
+	NTSYSAPI
+		BOOLEAN
+		NTAPI
+		RtlDosPathNameToNtPathName_U(
+			IN  PWSTR DosPathName,
+			OUT PUNICODE_STRING NtPathName,
+			OUT PWSTR* NtFileNamePart OPTIONAL,
+			OUT PRTL_RELATIVE_NAME_U DirectoryInfo OPTIONAL
+		);
+
+	BOOLEAN NTAPI RtlDoesFileExists_U(IN PCWSTR FileName);
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI
+		NtReplaceKey(
+			_In_ POBJECT_ATTRIBUTES NewFile,
+			_In_ HANDLE TargetHandle,
+			_In_ POBJECT_ATTRIBUTES OldFile
+		);
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI
+		NtSaveKey(
+			_In_ HANDLE KeyHandle,
+			_In_ HANDLE FileHandle
+		);
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI
+		NtSaveKeyEx(
+			_In_ HANDLE KeyHandle,
+			_In_ HANDLE FileHandle,
+			_In_ ULONG Format
+		);
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI
+		NtSaveMergedKeys(
+			_In_ HANDLE HighPrecedenceKeyHandle,
+			_In_ HANDLE LowPrecedenceKeyHandle,
+			_In_ HANDLE FileHandle
+		);
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI
+		NtRestoreKey(
+			_In_ HANDLE KeyHandle,
+			_In_ HANDLE FileHandle,
+			_In_ ULONG Flags
+		);
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI
+		NtUnloadKey(
+			_In_ POBJECT_ATTRIBUTES TargetKey
+		);
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI
+		NtUnloadKeyEx(
+			_In_ POBJECT_ATTRIBUTES TargetKey,
+			_In_opt_ HANDLE Event
+		);
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI
+		NtUnloadKey2(
+			_In_ POBJECT_ATTRIBUTES TargetKey,
+			_In_ ULONG Flags
+		);
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI
+		NtNotifyChangeKey(
+			_In_ HANDLE KeyHandle,
+			_In_opt_ HANDLE Event,
+			_In_opt_ PIO_APC_ROUTINE ApcRoutine,
+			_In_opt_ PVOID ApcContext,
+			_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+			_In_ ULONG CompletionFilter,
+			_In_ BOOLEAN WatchTree,
+			_Out_ PVOID Buffer,
+			_In_ ULONG BufferSize,
+			_In_ BOOLEAN Asynchronous
+		);
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI
+		NtNotifyChangeMultipleKeys(
+			_In_ HANDLE MasterKeyHandle,
+			_In_opt_ ULONG Count,
+			_In_ POBJECT_ATTRIBUTES SubordinateObjects,
+			_In_opt_ HANDLE Event,
+			_In_opt_ PIO_APC_ROUTINE ApcRoutine,
+			_In_opt_ PVOID ApcContext,
+			_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+			_In_ ULONG CompletionFilter,
+			_In_ BOOLEAN WatchTree,
+			_Out_ PVOID Buffer,
+			_In_ ULONG BufferSize,
+			_In_ BOOLEAN Asynchronous
+		);
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI
+		NtSetTimer(
+			_In_ HANDLE TimerHandle,
+			_In_ PLARGE_INTEGER DueTime,
+			_In_opt_ PTIMER_APC_ROUTINE TimerApcRoutine,
+			_In_opt_ PVOID TimerContext,
+			_In_ BOOLEAN ResumeTimer,
+			_In_opt_ LONG Period,
+			_Out_opt_ PBOOLEAN PreviousState
+		);
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI
+		NtSetTimerEx(
+			_In_ HANDLE TimerHandle,
+			_In_ TIMER_SET_INFORMATION_CLASS TimerSetInformationClass,
+			_Inout_ PVOID TimerSetInformation,
+			_In_ ULONG TimerSetInformationLength
+		);
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI
+		NtCancelTimer(
+			_In_ HANDLE TimerHandle,
+			_Out_opt_ PBOOLEAN CurrentState
+		);
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI
+		NtQueryTimer(
+			_In_ HANDLE TimerHandle,
+			_In_ TIMER_INFORMATION_CLASS TimerInformationClass,
+			_Out_ PVOID TimerInformation,
+			_In_ ULONG TimerInformationLength,
+			_Out_opt_ PULONG ReturnLength
+		);
+
+	NTSYSCALLAPI
+		VOID
+		NTAPI
+		RtlSecondsSince1970ToTime(
+			ULONG          ElapsedSeconds,
+			PLARGE_INTEGER Time
+		);
+
+	NTSYSCALLAPI
+		BOOLEAN
+		NTAPI
+		RtlTimeToSecondsSince1970(
+			PLARGE_INTEGER Time,
+			PULONG         ElapsedSeconds
+		);
+
+	typedef enum _SEMAPHORE_INFORMATION_CLASS {
+		SemaphoreBasicInformation
+	} SEMAPHORE_INFORMATION_CLASS, * PSEMAPHORE_INFORMATION_CLASS;
+
+	typedef struct _SEMAPHORE_BASIC_INFORMATION {
+		ULONG                   CurrentCount;
+		ULONG                   MaximumCount;
+	} SEMAPHORE_BASIC_INFORMATION, * PSEMAPHORE_BASIC_INFORMATION;
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQuerySemaphore(
+			IN HANDLE               SemaphoreHandle,
+			IN SEMAPHORE_INFORMATION_CLASS SemaphoreInformationClass,
+			OUT PVOID               SemaphoreInformation,
+			IN ULONG                SemaphoreInformationLength,
+			OUT PULONG              ReturnLength OPTIONAL);
+
+	//-----------------------------------------------------------------------------
+	// Process functions
+
+#define GDI_HANDLE_BUFFER_SIZE      34 
+
+	// For ProcessExecuteFlags
+#define MEM_EXECUTE_OPTION_DISABLE   0x01
+#define MEM_EXECUTE_OPTION_ENABLE    0x02
+#define MEM_EXECUTE_OPTION_PERMANENT 0x08
+
+	//
+	// Process Information Classes
+	//
+
+	typedef enum _PROCESSINFOCLASS {
+		ProcessBasicInformation,                // 0x00
+		ProcessQuotaLimits,                     // 0x01
+		ProcessIoCounters,                      // 0x02
+		ProcessVmCounters,                      // 0x03
+		ProcessTimes,                           // 0x04
+		ProcessBasePriority,                    // 0x05
+		ProcessRaisePriority,                   // 0x06
+		ProcessDebugPort,                       // 0x07
+		ProcessExceptionPort,                   // 0x08
+		ProcessAccessToken,                     // 0x09
+		ProcessLdtInformation,                  // 0x0A
+		ProcessLdtSize,                         // 0x0B
+		ProcessDefaultHardErrorMode,            // 0x0C
+		ProcessIoPortHandlers,                  // 0x0D Note: this is kernel mode only
+		ProcessPooledUsageAndLimits,            // 0x0E
+		ProcessWorkingSetWatch,                 // 0x0F
+		ProcessUserModeIOPL,                    // 0x10
+		ProcessEnableAlignmentFaultFixup,       // 0x11
+		ProcessPriorityClass,                   // 0x12
+		ProcessWx86Information,                 // 0x13
+		ProcessHandleCount,                     // 0x14
+		ProcessAffinityMask,                    // 0x15
+		ProcessPriorityBoost,                   // 0x16
+		ProcessDeviceMap,                       // 0x17
+		ProcessSessionInformation,              // 0x18
+		ProcessForegroundInformation,           // 0x19
+		ProcessWow64Information,                // 0x1A
+		ProcessImageFileName,                   // 0x1B
+		ProcessLUIDDeviceMapsEnabled,           // 0x1C
+		ProcessBreakOnTermination,              // 0x1D
+		ProcessDebugObjectHandle,               // 0x1E
+		ProcessDebugFlags,                      // 0x1F
+		ProcessHandleTracing,                   // 0x20
+		ProcessIoPriority,                      // 0x21
+		ProcessExecuteFlags,                    // 0x22
+		ProcessTlsInformation,
+		ProcessCookie,
+		ProcessImageInformation,
+		ProcessCycleTime,
+		ProcessPagePriority,
+		ProcessInstrumentationCallback,
+		ProcessThreadStackAllocation,
+		ProcessWorkingSetWatchEx,
+		ProcessImageFileNameWin32,
+		ProcessImageFileMapping,
+		ProcessAffinityUpdateMode,
+		ProcessMemoryAllocationMode,
+		ProcessGroupInformation,
+		ProcessTokenVirtualizationEnabled,
+		ProcessConsoleHostProcess,
+		ProcessWindowInformation,
+		MaxProcessInfoClass                     // MaxProcessInfoClass should always be the last enum
+	} PROCESSINFOCLASS;
+
+	//
+	// Thread Information Classes
+	//
+
+	typedef enum _THREADINFOCLASS {
+		ThreadBasicInformation,                 // 0x00
+		ThreadTimes,                            // 0x01
+		ThreadPriority,                         // 0x02
+		ThreadBasePriority,                     // 0x03
+		ThreadAffinityMask,                     // 0x04
+		ThreadImpersonationToken,               // 0x05  HANDLE
+		ThreadDescriptorTableEntry,             // 0x06  ULONG Selector + LDT_ENTRY
+		ThreadEnableAlignmentFaultFixup,        // 0x07
+		ThreadEventPair,                        // 0x08
+		ThreadQuerySetWin32StartAddress,        // 0x09
+		ThreadZeroTlsCell,                      // 0x0A
+		ThreadPerformanceCount,                 // 0x0B
+		ThreadAmILastThread,                    // 0x0C  ULONG
+		ThreadIdealProcessor,                   // 0x0D
+		ThreadPriorityBoost,                    // 0x0E
+		ThreadSetTlsArrayAddress,               // 0x0F
+		MaxThreadInfoClass
+	} THREADINFOCLASS;
+
+	typedef enum _DEBUGOBJECTINFOCLASS
+	{
+		DebugObjectFlags = 1,
+		MaxDebugObjectInfoClass
+	} DEBUGOBJECTINFOCLASS, * PDEBUGOBJECTINFOCLASS;
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		DbgUiStopDebugging(
+			_In_ HANDLE Process
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtSetInformationThread(
+			IN HANDLE ThreadHandle,
+			IN THREADINFOCLASS ThreadInformationClass,
+			IN PVOID ThreadInformation,
+			IN ULONG ThreadInformationLength);
+
+	NTSYSAPI PVOID NTAPI RtlImageDirectoryEntryToData(IN PVOID Base,
+		IN BOOLEAN MappedAsImage, IN USHORT DirectoryEntry,
+		OUT PULONG Size);
+
+	NTSYSAPI PIMAGE_BASE_RELOCATION NTAPI LdrProcessRelocationBlock(
+		IN ULONG_PTR Address,
+		IN ULONG Count,
+		IN PUSHORT TypeOffset,
+		IN LONG_PTR Delta);
+
+	typedef struct _SECTION_IMAGE_INFORMATION
+	{
+		PVOID TransferAddress;
+		ULONG ZeroBits;
+		ULONG_PTR MaximumStackSize;
+		ULONG_PTR CommittedStackSize;
+		ULONG SubSystemType;
+		union _SECTION_IMAGE_INFORMATION_u0
+		{
+			struct _SECTION_IMAGE_INFORMATION_s0
+			{
+				USHORT SubSystemMinorVersion;
+				USHORT SubSystemMajorVersion;
+			};
+			ULONG SubSystemVersion;
+		};
+		ULONG GpValue;
+		USHORT ImageCharacteristics;
+		USHORT DllCharacteristics;
+		USHORT Machine;
+		BOOLEAN ImageContainsCode;
+		BOOLEAN Spare1;
+		ULONG LoaderFlags;
+		ULONG Reserved[2];
+
+	} SECTION_IMAGE_INFORMATION, * PSECTION_IMAGE_INFORMATION;
+
+
+	typedef struct _SECTION_BASIC_INFORMATION {
+
+		ULONG Unknown;
+		ULONG SectionAttributes;
+		LARGE_INTEGER SectionSize;
+
+	}SECTION_BASIC_INFORMATION, * PSECTION_BASIC_INFORMATION;
+
+
+	typedef struct _RTL_USER_PROCESS_INFORMATION
+	{
+		ULONG Length;
+		HANDLE ProcessHandle;
+		HANDLE ThreadHandle;
+		CLIENT_ID ClientId;
+		SECTION_IMAGE_INFORMATION ImageInformation;
+
+	} RTL_USER_PROCESS_INFORMATION, * PRTL_USER_PROCESS_INFORMATION;
+
+	//
+	// Process Environment Block
+	//
+
+	typedef struct _PEB_FREE_BLOCK
+	{
+		struct _PEB_FREE_BLOCK* Next;
+		ULONG Size;
+
+	} PEB_FREE_BLOCK, * PPEB_FREE_BLOCK;
+
+
+	typedef struct _PEB_LDR_DATA
+	{
+		ULONG Length;
+		BOOLEAN Initialized;
+		HANDLE SsHandle;
+		LIST_ENTRY InLoadOrderModuleList;               // Points to the loaded modules (main EXE usually)
+		LIST_ENTRY InMemoryOrderModuleList;             // Points to all modules (EXE and all DLLs)
+		LIST_ENTRY InInitializationOrderModuleList;
+		PVOID      EntryInProgress;
+
+	} PEB_LDR_DATA, * PPEB_LDR_DATA;
+
+
+	typedef struct _LDR_DATA_TABLE_ENTRY
+	{
+		LIST_ENTRY InLoadOrderLinks;
+		LIST_ENTRY InMemoryOrderLinks;
+		LIST_ENTRY InInitializationOrderLinks;
+		PVOID DllBase;                             // Base address of the module
+		PVOID EntryPoint;
+		ULONG SizeOfImage;
+		UNICODE_STRING FullDllName;
+		UNICODE_STRING BaseDllName;
+		ULONG  Flags;
+		USHORT LoadCount;
+		USHORT TlsIndex;
+		LIST_ENTRY HashLinks;
+		PVOID SectionPointer;
+		ULONG CheckSum;
+		ULONG TimeDateStamp;
+		PVOID LoadedImports;
+		PVOID EntryPointActivationContext;
+		PVOID PatchInformation;
+		PVOID Unknown1;
+		PVOID Unknown2;
+		PVOID Unknown3;
+
+	} LDR_DATA_TABLE_ENTRY, * PLDR_DATA_TABLE_ENTRY;
+
+	typedef unsigned int QWORD;
+	typedef struct _ACTIVATION_CONTEXT_DATA { void* dummy; } ACTIVATION_CONTEXT_DATA; //XP and up
+	typedef struct _ASSEMBLY_STORAGE_MAP { void* dummy; } ASSEMBLY_STORAGE_MAP;       //XP and up
+	typedef struct _FLS_CALLBACK_INFO { void* dummy; } FLS_CALLBACK_INFO;             //WS03 and up
+
+	typedef struct _RTL_USER_PROCESS_PARAMETERS
+	{
+		DWORD                   MaximumLength;                 //0x00 
+		DWORD                   Length;                        //0x04 
+		DWORD                   Flags;                         //0x08 
+		DWORD                   DebugFlags;                    //0x0C 
+		void* ConsoleHandle;                 //0x10 
+		DWORD                   ConsoleFlags;                  //0x14 
+		HANDLE                  StdInputHandle;                //0x18 
+		HANDLE                  StdOutputHandle;               //0x1C 
+		HANDLE                  StdErrorHandle;                //0x20 
+		UNICODE_STRING          CurrentDirectoryPath;          //0x24 
+		HANDLE                  CurrentDirectoryHandle;        //0x2C 
+		UNICODE_STRING          DllPath;                       //0x30 
+		UNICODE_STRING          ImagePathName;                 //0x38 
+		UNICODE_STRING          CommandLine;                   //0x40 
+		void* Environment;                   //0x48 
+		DWORD                   StartingPositionLeft;          //0x4C 
+		DWORD                   StartingPositionTop;           //0x50 
+		DWORD                   Width;                         //0x54 
+		DWORD                   Height;                        //0x58 
+		DWORD                   CharWidth;                     //0x5C 
+		DWORD                   CharHeight;                    //0x60 
+		DWORD                   ConsoleTextAttributes;         //0x64 
+		DWORD                   WindowFlags;                   //0x68 
+		DWORD                   ShowWindowFlags;               //0x6C 
+		UNICODE_STRING          WindowTitle;                   //0x70 
+		UNICODE_STRING          DesktopName;                   //0x78 
+		UNICODE_STRING          ShellInfo;                     //0x80 
+		UNICODE_STRING          RuntimeData;                   //0x88 
+		RTL_DRIVE_LETTER_CURDIR DLCurrentDirectory[0x20];      //0x90 
+	} RTL_USER_PROCESS_PARAMETERS, * PRTL_USER_PROCESS_PARAMETERS;
+
+	typedef struct _PEB
+	{
+		BOOLEAN                         InheritedAddressSpace;              //0x0000
+		BOOLEAN                         ReadImageFileExecOptions;           //0x0001
+		BOOLEAN                         BeingDebugged;                      //0x0002
+		union
+		{
+			BOOLEAN                     SpareBool;                          //0x0003 (NT3.51-late WS03)
+			struct
+			{
+				BYTE                    ImageUsesLargePages : 1;   //0x0003:0 (WS03_SP1+)
+				BYTE                    IsProtectedProcess : 1;   //0x0003:1 (Vista+)
+				BYTE                    IsLegacyProcess : 1;   //0x0003:2 (Vista+)
+				BYTE                    IsImageDynamicallyRelocated : 1;   //0x0003:3 (Vista+)
+				BYTE                    SkipPatchingUser32Forwarders : 1;   //0x0003:4 (Vista_SP1+)
+				BYTE                    IsPackagedProcess : 1;   //0x0003:5 (Win8_BETA+)
+				BYTE                    IsAppContainer : 1;   //0x0003:6 (Win8_RTM+)
+				BYTE                    SpareBit : 1;   //0x0003:7
+			} bits;
+		} byte3;
+		HANDLE                          Mutant;                             //0x0004
+		void* ImageBaseAddress;                   //0x0008
+		PEB_LDR_DATA* Ldr;                                //0x000C  (all loaded modules in process)
+		RTL_USER_PROCESS_PARAMETERS* ProcessParameters;                  //0x0010
+		void* SubSystemData;                      //0x0014
+		void* ProcessHeap;                        //0x0018
+		RTL_CRITICAL_SECTION* FastPebLock;                        //0x001C
+		union
+		{
+			void* FastPebLockRoutine;                 //0x0020 (NT3.51-Win2k)
+			void* SparePtr1;                          //0x0020 (early WS03)
+			void* AtlThunkSListPtr;                   //0x0020 (late WS03+)
+		} dword20;
+		union
+		{
+			void* FastPebUnlockRoutine;               //0x0024 (NT3.51-XP)
+			void* SparePtr2;                          //0x0024 (WS03)
+			void* IFEOKey;                            //0x0024 (Vista+)
+		} dword24;
+		union
+		{
+			DWORD                       EnvironmentUpdateCount;             //0x0028 (NT3.51-WS03)
+			struct
+			{
+				DWORD                   ProcessInJob : 1;        //0x0028:0 (Vista+)
+				DWORD                   ProcessInitializing : 1;        //0x0028:1 (Vista+)
+				DWORD                   ProcessUsingVEH : 1;        //0x0028:2 (Vista_SP1+)
+				DWORD                   ProcessUsingVCH : 1;        //0x0028:3 (Vista_SP1+)
+				DWORD                   ProcessUsingFTH : 1;        //0x0028:4 (Win7_BETA+)
+				DWORD                   ReservedBits0 : 27;       //0x0028:5 (Win7_BETA+)
+			} vista_CrossProcessFlags;
+		} struct28;
+		union
+		{
+			void* KernelCallbackTable;                //0x002C (Vista+)
+			void* UserSharedInfoPtr;                  //0x002C (Vista+)
+		} dword2C;
+		DWORD                           SystemReserved;                     //0x0030 (NT3.51-XP)
+		//Microsoft seems to keep changing their mind with DWORD 0x34
+		union
+		{
+			DWORD                       SystemReserved2;                    //0x0034 (NT3.51-Win2k)
+			struct
+			{
+				DWORD                   ExecuteOptions : 2;        //0x0034:0 (XP-early WS03) 
+				DWORD                   SpareBits : 30;       //0x0034:2 (XP-early WS03)
+			} xpBits;
+			DWORD                       AtlThunkSListPtr32;                 //0x0034 (late XP,Win7+)
+			DWORD                       SpareUlong;                         //0x0034 (late WS03-Vista)
+			struct
+			{
+				DWORD                   HeapTracingEnabled : 1;        //0x0034:0 (Win7_BETA)
+				DWORD                   CritSecTracingEnabled : 1;        //0x0034:1 (Win7_BETA)
+				DWORD                   SpareTracingBits : 30;       //0x0034:2 (Win7_BETA)
+			} win7_TracingFlags;
+		} dword34;
+		union
+		{
+			PEB_FREE_BLOCK* FreeList;                           //0x0038 (NT3.51-early Vista)
+			DWORD                       SparePebPtr0;                       //0x0038 (last Vista)
+			void* ApiSetMap;                          //0x0038 (Win7+)
+		} dword38;
+		DWORD                           TlsExpansionCounter;                //0x003C
+		void* TlsBitmap;                          //0x0040
+		DWORD                           TlsBitmapBits[2];                   //0x0044
+		void* ReadOnlySharedMemoryBase;           //0x004C
+		union
+		{
+			void* ReadOnlyShareMemoryHeap;            //0x0050 (NT3.51-WS03)
+			void* HotpatchInformation;                //0x0050 (Vista+)
+		} dword50;
+		void** ReadOnlyStaticServerData;           //0x0054
+		void* AnsiCodePageData;                   //0x0058
+		void* OemCodePageData;                    //0x005C
+		void* UnicodeCaseTableData;               //0x0060
+		DWORD                           NumberOfProcessors;                 //0x0064
+		DWORD                           NtGlobalFlag;                       //0x0068
+		LARGE_INTEGER                   CriticalSectionTimeout;             //0x0070
+		DWORD                           HeapSegmentReserve;                 //0x0078
+		DWORD                           HeapSegmentCommit;                  //0x007C
+		DWORD                           HeapDeCommitTotalFreeThreshold;     //0x0080
+		DWORD                           HeapDeCommitFreeBlockThreshold;     //0x0084
+		DWORD                           NumberOfHeaps;                      //0x0088
+		DWORD                           MaximumNumberOfHeaps;               //0x008C
+		void** ProcessHeaps;                       //0x0090
+		void* GdiSharedHandleTable;               //0x0094
+
+		//end of NT 3.51 members / members that follow available on NT 4.0 and up
+
+		void* ProcessStarterHelper;               //0x0098
+		DWORD                           GdiDCAttributeList;                 //0x009C
+		union
+		{
+			struct
+			{
+				void* LoaderLock;                         //0x00A0 (NT4)
+			} nt4;
+			struct
+			{
+				RTL_CRITICAL_SECTION* LoaderLock;                         //0x00A0 (Win2k+)
+			} win2k;
+		} dwordA0;
+		DWORD                           OSMajorVersion;                     //0x00A4
+		DWORD                           OSMinorVersion;                     //0x00A8
+		WORD                            OSBuildNumber;                      //0x00AC
+		WORD                            OSCSDVersion;                       //0x00AE
+		DWORD                           OSPlatformId;                       //0x00B0
+		DWORD                           ImageSubsystem;                     //0x00B4
+		DWORD                           ImageSubsystemMajorVersion;         //0x00B8
+		DWORD                           ImageSubsystemMinorVersion;         //0x00BC
+		union
+		{
+			KAFFINITY                   ImageProcessAffinityMask;           //0x00C0 (NT4-early Vista)
+			KAFFINITY                   ActiveProcessAffinityMask;          //0x00C0 (late Vista+)
+		} dwordC0;
+		DWORD                           GdiHandleBuffer[0x22];              //0x00C4
+		void* PostProcessInitRoutine;             //0x014C / void (*PostProcessInitRoutine) (void);
+
+		//members that follow available on Windows 2000 and up
+
+		void* TlsExpansionBitmap;                 //0x0150
+		DWORD                           TlsExpansionBitmapBits[0x20];       //0x0154
+		DWORD                           SessionId;                          //0x01D4
+		ULARGE_INTEGER                  AppCompatFlags;                     //0x01D8
+		ULARGE_INTEGER                  AppCompatFlagsUser;                 //0x01E0
+		void* pShimData;                          //0x01E8
+		void* AppCompatInfo;                      //0x01EC
+		UNICODE_STRING                  CSDVersion;                         //0x01F0
+
+		//members that follow available on Windows XP and up
+
+		ACTIVATION_CONTEXT_DATA* ActivationContextData;              //0x01F8
+		ASSEMBLY_STORAGE_MAP* ProcessAssemblyStorageMap;          //0x01FC
+		ACTIVATION_CONTEXT_DATA* SystemDefaultActivationContextData; //0x0200
+		ASSEMBLY_STORAGE_MAP* SystemAssemblyStorageMap;           //0x0204
+		DWORD                           MinimumStackCommit;                 //0x0208
+
+		//members that follow available on Windows Server 2003 and up
+
+		FLS_CALLBACK_INFO* FlsCallback;                        //0x020C
+		LIST_ENTRY                      FlsListHead;                        //0x0210
+		void* FlsBitmap;                          //0x0218
+		DWORD                           FlsBitmapBits[4];                   //0x021C
+		DWORD                           FlsHighIndex;                       //0x022C
+
+		//members that follow available on Windows Vista and up
+
+		void* WerRegistrationData;                //0x0230
+		void* WerShipAssertPtr;                   //0x0234
+
+		//members that follow available on Windows 7 BETA and up
+
+		union
+		{
+			void* pContextData;                       //0x0238 (prior to Windows 8)
+			void* pUnused;                            //0x0238 (Windows 8)
+		} dword238;
+		void* pImageHeaderHash;                   //0x023C
+
+		//members that follow available on Windows 7 RTM and up
+
+		struct //TracingFlags
+		{
+			DWORD                       HeapTracingEnabled : 1;        //0x0240:0
+			DWORD                       CritSecTracingEnabled : 1;        //0x0240:1
+			DWORD                       LibLoaderTracingEnabled : 1;        //0x0240:2
+			DWORD                       SpareTracingBits : 29;       //0x0240:3
+		} dword240;
+		DWORD                           dummy02;                            //0x0244
+
+		//members that follow available on Windows 8 and up
+		QWORD                           CsrServerReadOnlySharedMemoryBase;  //0x0248
+
+		//members that follow available on Windows 10 and up
+		DWORD                           TppWorkerpListLock;                 //0x0250
+		union //conflicting reports about what 0x254 points to
+		{
+			LIST_ENTRY                  TppWorkerpList;                     //0x0254
+			DWORD                       dwSystemCallMode;                   //0x0254 / set to 2 under 64-bit Windows in a 32-bit process (WOW64)
+		} dword254;
+		void* WaitOnAddressHashTable[128];        //0x025C
+
+	} PEB, * PPEB;
+
+
+	//
+	// Thread environment block
+	//
+
+	typedef struct _TEB
+	{
+		NT_TIB NtTib;
+		PVOID  EnvironmentPointer;
+		CLIENT_ID ClientId;
+		PVOID ActiveRpcHandle;
+		PVOID ThreadLocalStoragePointer;
+		PPEB ProcessEnvironmentBlock;
+		ULONG LastErrorValue;
+		ULONG CountOfOwnedCriticalSections;
+		PVOID CsrClientThread;
+		PVOID Win32ThreadInfo;
+		// Incomplete
+
+	} TEB, * PTEB;
+
+
+	typedef struct _PROCESS_BASIC_INFORMATION
+	{
+		NTSTATUS ExitStatus;
+		PPEB PebBaseAddress;
+		ULONG_PTR AffinityMask;
+		KPRIORITY BasePriority;
+		ULONG_PTR UniqueProcessId;
+		ULONG_PTR InheritedFromUniqueProcessId;
+
+	} PROCESS_BASIC_INFORMATION, * PPROCESS_BASIC_INFORMATION;
+
+
+	typedef VOID(NTAPI* PUSER_THREAD_START_ROUTINE)(IN PVOID ApcArgument1);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlAdjustPrivilege(
+			ULONG    Privilege,
+			BOOLEAN  Enable,
+			BOOLEAN  CurrentThread,
+			PBOOLEAN Enabled
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlCreateProcessParameters(
+			PRTL_USER_PROCESS_PARAMETERS* ProcessParameters,
+			PUNICODE_STRING ImagePathName,
+			PUNICODE_STRING DllPath,
+			PUNICODE_STRING CurrentDirectory,
+			PUNICODE_STRING CommandLine,
+			PVOID Environment,
+			PUNICODE_STRING WindowTitle,
+			PUNICODE_STRING DesktopInfo,
+			PUNICODE_STRING ShellInfo,
+			PUNICODE_STRING RuntimeData
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlDestroyProcessParameters(
+			PRTL_USER_PROCESS_PARAMETERS ProcessParameters
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlCreateUserProcess(
+			PUNICODE_STRING NtImagePathName,
+			ULONG Attributes,
+			PRTL_USER_PROCESS_PARAMETERS ProcessParameters,
+			PSECURITY_DESCRIPTOR ProcessSecurityDescriptor,
+			PSECURITY_DESCRIPTOR ThreadSecurityDescriptor,
+			HANDLE ParentProcess,
+			BOOLEAN InheritHandles,
+			HANDLE DebugPort,
+			HANDLE ExceptionPort,
+			PRTL_USER_PROCESS_INFORMATION ProcessInformation
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlCreateUserThread(
+			IN HANDLE Process,
+			IN PSECURITY_DESCRIPTOR ThreadSecurityDescriptor OPTIONAL,
+			IN BOOLEAN CreateSuspended,
+			IN ULONG_PTR ZeroBits OPTIONAL,
+			IN SIZE_T MaximumStackSize OPTIONAL,
+			IN SIZE_T CommittedStackSize OPTIONAL,
+			IN PUSER_THREAD_START_ROUTINE StartAddress,
+			IN PVOID Parameter OPTIONAL,
+			OUT PHANDLE Thread OPTIONAL,
+			OUT PCLIENT_ID ClientId OPTIONAL
+		);
+
+
+#define NtCurrentProcess() ((HANDLE) -1)
+#define NtCurrentThread()  ((HANDLE) -2)
+#define NtCurrentPeb()     PPEB(NtCurrentTeb()->ProcessEnvironmentBlock)
+
+#define PS_REQUEST_BREAKAWAY 1
+#define PS_NO_DEBUG_INHERIT  2
+#define PS_INHERIT_HANDLES   4
+#define PS_UNKNOWN_VALUE     8
+#define PS_ALL_FLAGS PS_REQUEST_BREAKAWAY |PS_NO_DEBUG_INHERIT |PS_INHERIT_HANDLES | PS_UNKNOWN_VALUE
+
+#define LDRP_STATIC_LINK                        0x00000002
+#define LDRP_IMAGE_DLL                          0x00000004
+#define LDRP_LOAD_IN_PROGRESS                   0x00001000
+#define LDRP_UNLOAD_IN_PROGRESS                 0x00002000
+#define LDRP_ENTRY_PROCESSED                    0x00004000
+#define LDRP_ENTRY_INSERTED                     0x00008000
+#define LDRP_CURRENT_LOAD                       0x00010000
+#define LDRP_FAILED_BUILTIN_LOAD                0x00020000
+#define LDRP_DONT_CALL_FOR_THREADS              0x00040000
+#define LDRP_PROCESS_ATTACH_CALLED              0x00080000
+#define LDRP_DEBUG_SYMBOLS_LOADED               0x00100000
+#define LDRP_IMAGE_NOT_AT_BASE                  0x00200000
+#define LDRP_COR_IMAGE                          0x00400000
+#define LDRP_COR_OWNS_UNMAP                     0x00800000
+#define LDRP_SYSTEM_MAPPED                      0x01000000
+#define LDRP_IMAGE_VERIFYING                    0x02000000
+#define LDRP_DRIVER_DEPENDENT_DLL               0x04000000
+#define LDRP_ENTRY_NATIVE                       0x08000000
+#define LDRP_REDIRECTED                         0x10000000
+#define LDRP_NON_PAGED_DEBUG_INFO               0x20000000
+#define LDRP_MM_LOADED                          0x40000000
+#define LDRP_COMPAT_DATABASE_PROCESSED          0x80000000
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		LdrFindEntryForAddress(
+			LPVOID Address,
+			PLDR_DATA_TABLE_ENTRY* ppEntry
+		);
+
+	typedef PVOID PPS_APC_ROUTINE;
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI
+		NtQueueApcThread(
+			__in HANDLE ThreadHandle,
+			__in PPS_APC_ROUTINE ApcRoutine,
+			__in_opt PVOID ApcArgument1,
+			__in_opt PVOID ApcArgument2,
+			__in_opt PVOID ApcArgument3
+		);
+
+	typedef struct _NT_PROC_THREAD_ATTRIBUTE_ENTRY //undocumented use by your risk
+	{
+		ULONG_PTR Attribute;
+		SIZE_T Size;
+		ULONG_PTR Value;
+		ULONG Unknown;
+	} PROC_THREAD_ATTRIBUTE_ENTRY, * PPROC_THREAD_ATTRIBUTE_ENTRY;
+
+	typedef struct _NT_PROC_THREAD_ATTRIBUTE_LIST
+	{
+		SIZE_T  Length;
+		PROC_THREAD_ATTRIBUTE_ENTRY Entry[1];
+	} NT_PROC_THREAD_ATTRIBUTE_LIST, * PNT_PROC_THREAD_ATTRIBUTE_LIST;
+
+	typedef struct _PROCESS_CREATE_INFO
+	{
+		QWORD	cb;
+		QWORD	UnKown0;
+		DWORD	Flags2;
+		BYTE	UnKown1;
+		WORD	ImageCharacteristics;
+		DWORD	DesiredAccess;
+		QWORD	UnKown2;
+		QWORD	UnKown3;
+		QWORD	UnKown4;
+		DWORD	UnKown5;
+		BYTE	UnKown6;
+		DWORD	Flags;
+		PVOID* CurrentPeb;
+		PVOID* ParentProcessPeb;
+		QWORD	UnKown7;
+		DWORD	UnKown8;
+		BYTE	UnKown9;
+	}PROCESS_CREATE_INFO, * PPROCESS_CREATE_INFO;
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtCreateProcessEx(
+			OUT PHANDLE     ProcessHandle,
+			IN ACCESS_MASK  DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes  OPTIONAL,
+			IN HANDLE   ParentProcess,
+			IN ULONG    Flags,
+			IN HANDLE SectionHandle     OPTIONAL,
+			IN HANDLE DebugPort     OPTIONAL,
+			IN HANDLE ExceptionPort     OPTIONAL,
+			IN BOOLEAN  InJob
+		);
+
+	NTSYSAPI
+		NTSTATUS NTAPI NtCreateUserProcess(
+			PHANDLE ProcessHandle,
+			PHANDLE ThreadHandle,
+			ACCESS_MASK ProcessDesiredAccess,
+			ACCESS_MASK ThreadDesiredAccess,
+			POBJECT_ATTRIBUTES ProcessObjectAttributes,
+			POBJECT_ATTRIBUTES ThreadObjectAttributes,
+			ULONG ProcessFlags,
+			ULONG ThreadFlags,
+			PRTL_USER_PROCESS_PARAMETERS ProcessParameters,
+			PPROCESS_CREATE_INFO CreateInfo,
+			PNT_PROC_THREAD_ATTRIBUTE_LIST AttributeList
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtCreateProcess(
+			OUT PHANDLE ProcessHandle,
+			IN  ACCESS_MASK DesiredAccess,
+			IN  POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL,
+			IN  HANDLE ParentProcess,
+			IN  BOOLEAN InheritObjectTable,
+			IN  HANDLE SectionHandle OPTIONAL,
+			IN  HANDLE DebugPort OPTIONAL,
+			IN  HANDLE ExceptionPort OPTIONAL
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwCreateProcess(
+			OUT PHANDLE ProcessHandle,
+			IN  ACCESS_MASK DesiredAccess,
+			IN  POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL,
+			IN  HANDLE ParentProcess,
+			IN  BOOLEAN InheritObjectTable,
+			IN  HANDLE SectionHandle OPTIONAL,
+			IN  HANDLE DebugPort OPTIONAL,
+			IN  HANDLE ExceptionPort OPTIONAL
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtOpenProcess(
+			OUT PHANDLE ProcessHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes,
+			IN PCLIENT_ID ClientId OPTIONAL
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwOpenProcess(
+			OUT PHANDLE ProcessHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes,
+			IN PCLIENT_ID ClientId OPTIONAL
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtOpenThread(
+			OUT PHANDLE ThreadHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes,
+			IN PCLIENT_ID ClientId OPTIONAL
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwOpenThread(
+			OUT PHANDLE ThreadHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes,
+			IN PCLIENT_ID ClientId OPTIONAL
+		);
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI NtRemoveProcessDebug(
+			_In_ HANDLE 	ProcessHandle,
+			_In_ HANDLE 	DebugObjectHandle
+		);
+
+
+	NTSYSCALLAPI
+		NTSTATUS
+		NTAPI
+		NtSetInformationDebugObject(
+			_In_ HANDLE 	DebugObjectHandle,
+			_In_ DEBUGOBJECTINFOCLASS 	DebugObjectInformationClass,
+			_In_ PVOID 	DebugInformation,
+			_In_ ULONG 	DebugInformationLength,
+			_Out_opt_ PULONG 	ReturnLength
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQueryInformationProcess(
+			IN HANDLE ProcessHandle,
+			IN PROCESSINFOCLASS ProcessInformationClass,
+			OUT PVOID ProcessInformation,
+			IN ULONG ProcessInformationLength,
+			OUT PULONG ReturnLength OPTIONAL
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwQueryInformationProcess(
+			IN HANDLE ProcessHandle,
+			IN PROCESSINFOCLASS ProcessInformationClass,
+			OUT PVOID ProcessInformation,
+			IN ULONG ProcessInformationLength,
+			OUT PULONG ReturnLength OPTIONAL
+		);
+
+	NTSYSAPI VOID NTAPI RtlExitUserProcess(
+		_In_ NTSTATUS ExitStatus
+	);
+
+	NTSYSAPI VOID NTAPI RtlExitUserThread(
+		_In_ NTSTATUS ExitStatus
+	);
+
+	NTSYSAPI NTSTATUS NTAPI NtGetNextProcess(
+		HANDLE ProcessHandle,
+		ACCESS_MASK DesiredAccess,
+		ULONG HandleAttributes,
+		ULONG Flags,
+		PHANDLE NewProcessHandle);
+
+	NTSYSAPI NTSTATUS NTAPI NtGetNextThread(
+		HANDLE ProcessHandle,
+		HANDLE ThreadHandle,
+		ACCESS_MASK DesiredAccess,
+		ULONG HandleAttributes,//pass OBJ_XXX flags here
+		ULONG Flags,//must be zero
+		PHANDLE NewThreadHandle);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQueryInformationThread(
+			IN HANDLE ThreadHandle,
+			IN THREADINFOCLASS ThreadInformationClass,
+			OUT PVOID ThreadInformation,
+			IN ULONG ThreadInformationLength,
+			OUT PULONG ReturnLength OPTIONAL
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwQueryInformationThread(
+			IN HANDLE ThreadHandle,
+			IN THREADINFOCLASS ThreadInformationClass,
+			OUT PVOID ThreadInformation,
+			IN ULONG ThreadInformationLength,
+			OUT PULONG ReturnLength OPTIONAL
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtSetInformationProcess(
+			IN HANDLE ProcessHandle,
+			IN PROCESSINFOCLASS ProcessInformationClass,
+			IN PVOID ProcessInformation,
+			IN ULONG ProcessInformationLength
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwSetInformationProcess(
+			IN HANDLE ProcessHandle,
+			IN PROCESSINFOCLASS ProcessInformationClass,
+			IN PVOID ProcessInformation,
+			IN ULONG ProcessInformationLength
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtSuspendThread(
+			IN HANDLE ThreadHandle,
+			OUT PULONG PreviousSuspendCount OPTIONAL
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtGetContextThread(
+			IN HANDLE               ThreadHandle,
+			OUT PCONTEXT            pContext);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtSetContextThread(
+			IN HANDLE               ThreadHandle,
+			IN PCONTEXT             Context);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtAlertThread(
+			IN HANDLE               ThreadHandle);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtTestAlert();
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtAlertResumeThread(
+			IN HANDLE               ThreadHandle,
+			OUT PULONG              SuspendCount);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtSuspendProcess(IN HANDLE ProcessHandle);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtResumeProcess(IN HANDLE ProcessHandle);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtResumeThread(
+			IN HANDLE ThreadHandle,
+			OUT PULONG PreviousSuspendCount OPTIONAL
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtTerminateThread(
+			HANDLE Thread,
+			NTSTATUS ExitStatus
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwTerminateThread(
+			HANDLE Thread,
+			NTSTATUS ExitStatus
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtTerminateProcess(
+			HANDLE Process,
+			NTSTATUS ExitStatus
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwTerminateProcess(
+			HANDLE Process,
+			NTSTATUS ExitStatus
+		);
+
+	//------------------------------------------------------------------------------
+	// LPC Functions
+
+#define MAX_LPC_DATA 0x130    // Maximum number of bytes that can be copied through LPC
+
+	// Valid values for PORT_MESSAGE::u2::s2::Type
+#define LPC_REQUEST                  1
+#define LPC_REPLY                    2
+#define LPC_DATAGRAM                 3
+#define LPC_LOST_REPLY               4
+#define LPC_PORT_CLOSED              5
+#define LPC_CLIENT_DIED              6
+#define LPC_EXCEPTION                7
+#define LPC_DEBUG_EVENT              8
+#define LPC_ERROR_EVENT              9
+#define LPC_CONNECTION_REQUEST      10
+
+#define ALPC_REQUEST            0x2000 | LPC_REQUEST
+#define ALPC_CONNECTION_REQUEST 0x2000 | LPC_CONNECTION_REQUEST
+
+
+	//
+	// Define header for Port Message
+	//
+
+	typedef struct _PORT_MESSAGE
+	{
+		union
+		{
+			struct
+			{
+				USHORT DataLength;          // Length of data following the header (bytes)
+				USHORT TotalLength;         // Length of data + sizeof(PORT_MESSAGE)
+			} s1;
+			ULONG Length;
+		} u1;
+
+		union
+		{
+			struct
+			{
+				USHORT Type;
+				USHORT DataInfoOffset;
+			} s2;
+			ULONG ZeroInit;
+		} u2;
+
+		union
+		{
+			CLIENT_ID ClientId;
+			double   DoNotUseThisField;     // Force quadword alignment
+		};
+
+		ULONG  MessageId;                   // Identifier of the particular message instance
+
+		union
+		{
+			ULONG_PTR ClientViewSize;       // Size of section created by the sender (in bytes)
+			ULONG  CallbackId;              // 
+		};
+
+	} PORT_MESSAGE, * PPORT_MESSAGE;
+
+	//
+	// Define structure for initializing shared memory on the caller's side of the port
+	//
+
+	typedef struct _PORT_VIEW {
+
+		ULONG  Length;                      // Size of this structure
+		HANDLE SectionHandle;               // Handle to section object with
+		// SECTION_MAP_WRITE and SECTION_MAP_READ
+		ULONG  SectionOffset;               // The offset in the section to map a view for
+		// the port data area. The offset must be aligned 
+		// with the allocation granularity of the system.
+		SIZE_T ViewSize;                    // The size of the view (in bytes)
+		PVOID  ViewBase;                    // The base address of the view in the creator
+		// 
+		PVOID  ViewRemoteBase;              // The base address of the view in the process
+		// connected to the port.
+	} PORT_VIEW, * PPORT_VIEW;
+
+	//
+	// Define structure for shared memory coming from remote side of the port
+	//
+
+	typedef struct _REMOTE_PORT_VIEW {
+
+		ULONG  Length;                      // Size of this structure
+		SIZE_T ViewSize;                    // The size of the view (bytes)
+		PVOID  ViewBase;                    // Base address of the view
+
+	} REMOTE_PORT_VIEW, * PREMOTE_PORT_VIEW;
+
+	//
+	// Macro for initializing the message header
+	//
+
+#ifndef InitializeMessageHeader
+#define InitializeMessageHeader(ph, l, t)                              \
+	{                                                                      \
+	(ph)->u1.s1.TotalLength      = (USHORT)(l);                        \
+	(ph)->u1.s1.DataLength       = (USHORT)(l - sizeof(PORT_MESSAGE)); \
+	(ph)->u2.s2.Type             = (USHORT)(t);                        \
+	(ph)->u2.s2.DataInfoOffset   = 0;                                  \
+	(ph)->ClientId.UniqueProcess = NULL;                               \
+	(ph)->ClientId.UniqueThread  = NULL;                               \
+	(ph)->MessageId              = 0;                                  \
+	(ph)->ClientViewSize         = 0;                                  \
+	}
+#endif
+
+	/*++
+
+	NtCreatePort
+	============
+
+	Creates a LPC port object. The creator of the LPC port becomes a server
+	of LPC communication
+
+	PortHandle - Points to a variable that will receive the
+	port object handle if the call is successful.
+
+	ObjectAttributes - Points to a structure that specifies the object’s
+	attributes. OBJ_KERNEL_HANDLE, OBJ_OPENLINK, OBJ_OPENIF, OBJ_EXCLUSIVE,
+	OBJ_PERMANENT, and OBJ_INHERIT are not valid attributes for a port object.
+
+	MaxConnectionInfoLength - The maximum size, in bytes, of data that can
+	be sent through the port.
+
+	MaxMessageLength - The maximum size, in bytes, of a message
+	that can be sent through the port.
+
+	MaxPoolUsage - Specifies the maximum amount of NonPaged pool that can be used for
+	message storage. Zero means default value.
+
+	ZwCreatePort verifies that (MaxDataSize <= 0x104) and (MaxMessageSize <= 0x148).
+
+	--*/
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtCreatePort(
+			OUT PHANDLE PortHandle,
+			IN  POBJECT_ATTRIBUTES ObjectAttributes,
+			IN  ULONG MaxConnectionInfoLength,
+			IN  ULONG MaxMessageLength,
+			IN  ULONG MaxPoolUsage
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwCreatePort(
+			OUT PHANDLE PortHandle,
+			IN  POBJECT_ATTRIBUTES ObjectAttributes,
+			IN  ULONG MaxConnectionInfoLength,
+			IN  ULONG MaxMessageLength,
+			IN  ULONG MaxPoolUsage
+		);
+
+
+	/*++
+
+	NtConnectPort
+	=============
+
+	Creates a port connected to a named port (cliend side).
+
+	PortHandle - A pointer to a variable that will receive the client
+	communication port object handle value.
+
+	PortName - Points to a structure that specifies the name
+	of the port to connect to.
+
+	SecurityQos - Points to a structure that specifies the level
+	of impersonation available to the port listener.
+
+	ClientView - Optionally points to a structure describing
+	the shared memory region used to send large amounts of data
+	to the listener; if the call is successful, this will be updated.
+
+	ServerView - Optionally points to a caller-allocated buffer
+	or variable that receives information on the shared memory region
+	used by the listener to send large amounts of data to the
+	caller.
+
+	MaxMessageLength - Optionally points to a variable that receives the size,
+	in bytes, of the largest message that can be sent through the port.
+
+	ConnectionInformation - Optionally points to a caller-allocated
+	buffer or variable that specifies connect data to send to the listener,
+	and receives connect data sent by the listener.
+
+	ConnectionInformationLength - Optionally points to a variable that
+	specifies the size, in bytes, of the connect data to send
+	to the listener, and receives the size of the connect data
+	sent by the listener.
+
+	--*/
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtConnectPort(
+			OUT PHANDLE PortHandle,
+			IN  PUNICODE_STRING PortName,
+			IN  PSECURITY_QUALITY_OF_SERVICE SecurityQos,
+			IN  OUT PPORT_VIEW ClientView OPTIONAL,
+			OUT PREMOTE_PORT_VIEW ServerView OPTIONAL,
+			OUT PULONG MaxMessageLength OPTIONAL,
+			IN  OUT PVOID ConnectionInformation OPTIONAL,
+			IN  OUT PULONG ConnectionInformationLength OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwConnectPort(
+			OUT PHANDLE PortHandle,
+			IN  PUNICODE_STRING PortName,
+			IN  PSECURITY_QUALITY_OF_SERVICE SecurityQos,
+			IN  OUT PPORT_VIEW ClientView OPTIONAL,
+			OUT PREMOTE_PORT_VIEW ServerView OPTIONAL,
+			OUT PULONG MaxMessageLength OPTIONAL,
+			IN  OUT PVOID ConnectionInformation OPTIONAL,
+			IN  OUT PULONG ConnectionInformationLength OPTIONAL
+		);
+
+
+	/*++
+
+	NtListenPort
+	============
+
+	Listens on a port for a connection request message on the server side.
+
+	PortHandle - A handle to a port object. The handle doesn't need
+	to grant any specific access.
+
+	ConnectionRequest - Points to a caller-allocated buffer
+	or variable that receives the connect message sent to
+	the port.
+
+	--*/
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtListenPort(
+			IN  HANDLE PortHandle,
+			OUT PPORT_MESSAGE RequestMessage
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwListenPort(
+			IN  HANDLE PortHandle,
+			OUT PPORT_MESSAGE RequestMessage
+		);
+
+	/*++
+
+	NtAcceptConnectPort
+	===================
+
+	Accepts or rejects a connection request on the server side.
+
+	PortHandle - Points to a variable that will receive the port object
+	handle if the call is successful.
+
+	PortContext - A numeric identifier to be associated with the port.
+
+	ConnectionRequest - Points to a caller-allocated buffer or variable
+	that identifies the connection request and contains any connect
+	data that should be returned to requestor of the connection
+
+	AcceptConnection - Specifies whether the connection should
+	be accepted or not
+
+	ServerView - Optionally points to a structure describing
+	the shared memory region used to send large amounts of data to the
+	requestor; if the call is successful, this will be updated
+
+	ClientView - Optionally points to a caller-allocated buffer
+	or variable that receives information on the shared memory
+	region used by the requestor to send large amounts of data to the
+	caller
+
+	--*/
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtAcceptConnectPort(
+			OUT PHANDLE PortHandle,
+			IN  PVOID PortContext OPTIONAL,
+			IN  PPORT_MESSAGE ConnectionRequest,
+			IN  BOOLEAN AcceptConnection,
+			IN  OUT PPORT_VIEW ServerView OPTIONAL,
+			OUT PREMOTE_PORT_VIEW ClientView OPTIONAL
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwAcceptConnectPort(
+			OUT PHANDLE PortHandle,
+			IN  PVOID PortContext OPTIONAL,
+			IN  PPORT_MESSAGE ConnectionRequest,
+			IN  BOOLEAN AcceptConnection,
+			IN  OUT PPORT_VIEW ServerView OPTIONAL,
+			OUT PREMOTE_PORT_VIEW ClientView OPTIONAL
+		);
+
+
+	/*++
+
+	NtCompleteConnectPort
+	=====================
+
+	Completes the port connection process on the server side.
+
+	PortHandle - A handle to a port object. The handle doesn't need
+	to grant any specific access.
+
+	--*/
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtCompleteConnectPort(
+			IN  HANDLE PortHandle
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwCompleteConnectPort(
+			IN  HANDLE PortHandle
+		);
+
+
+	/*++
+
+	NtRequestPort
+	=============
+
+	Sends a request message to a port (client side)
+
+	PortHandle - A handle to a port object. The handle doesn't need
+	to grant any specific access.
+
+	RequestMessage - Points to a caller-allocated buffer or variable
+	that specifies the request message to send to the port.
+
+	--*/
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtRequestPort(
+			IN  HANDLE PortHandle,
+			IN  PPORT_MESSAGE RequestMessage
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwRequestPort(
+			IN  HANDLE PortHandle,
+			IN  PPORT_MESSAGE RequestMessage
+		);
+
+	/*++
+
+	NtRequestWaitReplyPort
+	======================
+
+	Sends a request message to a port and waits for a reply (client side)
+
+	PortHandle - A handle to a port object. The handle doesn't need
+	to grant any specific access.
+
+	RequestMessage - Points to a caller-allocated buffer or variable
+	that specifies the request message to send to the port.
+
+	ReplyMessage - Points to a caller-allocated buffer or variable
+	that receives the reply message sent to the port.
+
+	--*/
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtRequestWaitReplyPort(
+			IN  HANDLE PortHandle,
+			IN  PPORT_MESSAGE RequestMessage,
+			OUT PPORT_MESSAGE ReplyMessage
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwRequestWaitReplyPort(
+			IN  HANDLE PortHandle,
+			IN  PPORT_MESSAGE RequestMessage,
+			OUT PPORT_MESSAGE ReplyMessage
+		);
+
+
+	/*++
+
+	NtReplyPort
+	===========
+
+	Sends a reply message to a port (Server side)
+
+	PortHandle - A handle to a port object. The handle doesn't need
+	to grant any specific access.
+
+	ReplyMessage - Points to a caller-allocated buffer or variable
+	that specifies the reply message to send to the port.
+
+	--*/
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtReplyPort(
+			IN  HANDLE PortHandle,
+			IN  PPORT_MESSAGE ReplyMessage
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwReplyPort(
+			IN  HANDLE PortHandle,
+			IN  PPORT_MESSAGE ReplyMessage
+		);
+
+	/*++
+
+	NtReplyWaitReplyPort
+	====================
+
+	Sends a reply message to a port and waits for a reply message
+
+	PortHandle - A handle to a port object. The handle doesn't need
+	to grant any specific access.
+
+	ReplyMessage - Points to a caller-allocated buffer or variable
+	that specifies the reply message to send to the port.
+
+	--*/
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtReplyWaitReplyPort(
+			IN  HANDLE PortHandle,
+			IN  OUT PPORT_MESSAGE ReplyMessage
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwReplyWaitReplyPort(
+			IN  HANDLE PortHandle,
+			IN  OUT PPORT_MESSAGE ReplyMessage
+		);
+
+	/*++
+
+	NtReplyWaitReceivePort
+	======================
+
+	Optionally sends a reply message to a port and waits for a
+	message
+
+	PortHandle - A handle to a port object. The handle doesn't need
+	to grant any specific access.
+
+	PortContext - Optionally points to a variable that receives
+	a numeric identifier associated with the port.
+
+	ReplyMessage - Optionally points to a caller-allocated buffer
+	or variable that specifies the reply message to send to the port.
+
+	ReceiveMessage - Points to a caller-allocated buffer or variable
+	that receives the message sent to the port.
+
+	--*/
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtReplyWaitReceivePort(
+			IN  HANDLE PortHandle,
+			OUT PVOID* PortContext OPTIONAL,
+			IN  PPORT_MESSAGE ReplyMessage OPTIONAL,
+			OUT PPORT_MESSAGE ReceiveMessage
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwReplyWaitReceivePort(
+			IN  HANDLE PortHandle,
+			OUT PVOID* PortContext OPTIONAL,
+			IN  PPORT_MESSAGE ReplyMessage OPTIONAL,
+			OUT PPORT_MESSAGE ReceiveMessage
+		);
+
+	//-----------------------------------------------------------------------------
+	// Heap functions
+
+#define HEAP_NO_SERIALIZE               0x00000001
+#define HEAP_GROWABLE                   0x00000002
+#define HEAP_GENERATE_EXCEPTIONS        0x00000004
+#define HEAP_ZERO_MEMORY                0x00000008
+#define HEAP_REALLOC_IN_PLACE_ONLY      0x00000010
+#define HEAP_TAIL_CHECKING_ENABLED      0x00000020
+#define HEAP_FREE_CHECKING_ENABLED      0x00000040
+#define HEAP_DISABLE_COALESCE_ON_FREE   0x00000080
+#define HEAP_CREATE_ALIGN_16            0x00010000
+#define HEAP_CREATE_ENABLE_TRACING      0x00020000
+#define HEAP_MAXIMUM_TAG                0x0FFF
+#define HEAP_PSEUDO_TAG_FLAG            0x8000
+
+	//
+	// Data structure for heap definition. This includes various
+	// sizing parameters and callback routines, which, if left NULL,
+	// result in default behavior
+	//
+
+	typedef struct RTL_HEAP_PARAMETERS {
+		ULONG Length;        //sizeof(RTL_HEAP_PARAMETERS)
+		ULONG SegmentReserve;
+		ULONG SegmentCommit;
+		ULONG DeCommitFreeBlockThreshold;
+		ULONG DeCommitTotalFreeThreshold;
+		ULONG MaximumAllocationSize;
+		ULONG VirtualMemoryThreshold;
+		ULONG InitialCommit;
+		ULONG InitialReserve;
+		PVOID CommitRoutine;
+		ULONG Reserved;
+	} RTL_HEAP_PARAMETERS, * PRTL_HEAP_PARAMETERS;
+
+
+#define RtlProcessHeap() (HANDLE)(NtCurrentTeb()->ProcessEnvironmentBlock->ProcessHeap)
+
+
+	NTSYSAPI
+		HANDLE
+		NTAPI
+		RtlCreateHeap(
+			IN ULONG Flags,
+			IN PVOID BaseAddress OPTIONAL,
+			IN ULONG SizeToReserve,
+			IN ULONG SizeToCommit,
+			IN BOOLEAN Lock OPTIONAL,
+			IN PRTL_HEAP_PARAMETERS Definition OPTIONAL
+		);
+
+
+	NTSYSAPI
+		ULONG
+		NTAPI
+		RtlDestroyHeap(
+			IN HANDLE HeapHandle
+		);
+
+
+	NTSYSAPI
+		PVOID
+		NTAPI
+		RtlAllocateHeap(
+			IN HANDLE HeapHandle,
+			IN ULONG Flags,
+			IN SIZE_T Size
+		);
+
+
+	NTSYSAPI
+		PVOID
+		NTAPI
+		RtlReAllocateHeap(
+			IN HANDLE HeapHandle,
+			IN ULONG Flags,
+			IN LPVOID Address,
+			IN SIZE_T Size
+		);
+
+
+	NTSYSAPI
+		BOOLEAN
+		NTAPI
+		RtlFreeHeap(
+			IN HANDLE HeapHandle,
+			IN ULONG Flags,
+			IN PVOID Address
+		);
+
+
+	NTSYSAPI
+		ULONG
+		NTAPI
+		RtlCompactHeap(
+			IN HANDLE HeapHandle,
+			IN ULONG Flags
+		);
+
+
+	NTSYSAPI
+		BOOLEAN
+		NTAPI
+		RtlLockHeap(
+			IN HANDLE HeapHandle
+		);
+
+
+	NTSYSAPI
+		BOOLEAN
+		NTAPI
+		RtlUnlockHeap(
+			IN HANDLE HeapHandle
+		);
+
+
+	NTSYSAPI
+		ULONG
+		NTAPI
+		RtlSizeHeap(
+			IN HANDLE HeapHandle,
+			IN ULONG Flags,
+			IN PVOID Address
+		);
+
+
+	NTSYSAPI
+		BOOLEAN
+		NTAPI
+		RtlValidateHeap(
+			IN HANDLE HeapHandle,
+			IN ULONG Flags,
+			IN PVOID Address OPTIONAL
+		);
+
+	typedef struct _MEMORY_REGION_INFORMATION
+	{
+		PVOID AllocationBase;
+		ULONG AllocationProtect;
+		union
+		{
+			ULONG RegionType;
+			struct
+			{
+				ULONG Private : 1;
+				ULONG MappedDataFile : 1;
+				ULONG MappedImage : 1;
+				ULONG MappedPageFile : 1;
+				ULONG MappedPhysical : 1;
+				ULONG DirectMapped : 1;
+				ULONG SoftwareEnclave : 1; // REDSTONE3
+				ULONG PageSize64K : 1;
+				ULONG PlaceholderReservation : 1; // REDSTONE4
+				ULONG Reserved : 23;
+			};
+		};
+		SIZE_T RegionSize;
+		SIZE_T CommitSize;
+		ULONG_PTR PartitionId; // 19H1
+		ULONG_PTR NodePreference; // 20H1
+	} MEMORY_REGION_INFORMATION, * PMEMORY_REGION_INFORMATION;
+
+	//-----------------------------------------------------------------------------
+	// Virtual memory functions
+
+	typedef enum _MEMORY_INFORMATION_CLASS
+	{
+		MemoryBasicInformation,                 // 0x00 MEMORY_BASIC_INFORMATION
+		MemoryWorkingSetInformation,            // 0x01
+		MemoryMappedFilenameInformation,        // 0x02 UNICODE_STRING
+		MemoryRegionInformation,                // 0x03
+		MemoryWorkingSetExInformation           // 0x04
+
+	} MEMORY_INFORMATION_CLASS;
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtAllocateVirtualMemory(
+			IN HANDLE ProcessHandle,
+			IN OUT PVOID* BaseAddress,
+			IN ULONG ZeroBits,
+			IN OUT PSIZE_T RegionSize,
+			IN ULONG AllocationType,
+			IN ULONG Protect
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwAllocateVirtualMemory(
+			IN HANDLE ProcessHandle,
+			IN OUT PVOID* BaseAddress,
+			IN ULONG ZeroBits,
+			IN OUT PSIZE_T RegionSize,
+			IN ULONG AllocationType,
+			IN ULONG Protect
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtFreeVirtualMemory(
+			IN HANDLE ProcessHandle,
+			IN OUT PVOID* BaseAddress,
+			IN OUT PSIZE_T RegionSize,
+			IN ULONG FreeType
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwFreeVirtualMemory(
+			IN HANDLE ProcessHandle,
+			IN OUT PVOID* BaseAddress,
+			IN OUT PSIZE_T RegionSize,
+			IN ULONG FreeType
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtProtectVirtualMemory(
+			IN HANDLE ProcessHandle,
+			IN OUT PVOID* BaseAddress,
+			IN OUT PSIZE_T RegionSize,
+			IN ULONG NewProtect,
+			OUT PULONG OldProtect
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwProtectVirtualMemory(
+			IN HANDLE ProcessHandle,
+			IN OUT PVOID* BaseAddress,
+			IN OUT PSIZE_T RegionSize,
+			IN ULONG NewProtect,
+			OUT PULONG OldProtect
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtReadVirtualMemory(
+			IN HANDLE ProcessHandle,
+			IN PVOID BaseAddress,
+			OUT PVOID Buffer,
+			IN ULONG BufferSize,
+			OUT PULONG NumberOfBytesRead OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwReadVirtualMemory(
+			IN HANDLE ProcessHandle,
+			IN PVOID BaseAddress,
+			OUT PVOID Buffer,
+			IN ULONG BufferSize,
+			OUT PULONG NumberOfBytesRead OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtWriteVirtualMemory(
+			IN HANDLE ProcessHandle,
+			IN PVOID BaseAddress,
+			IN PVOID Buffer,
+			IN ULONG BufferSize,
+			OUT PULONG NumberOfBytesWritten OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwWriteVirtualMemory(
+			IN HANDLE ProcessHandle,
+			IN PVOID BaseAddress,
+			IN PVOID Buffer,
+			IN ULONG BufferSize,
+			OUT PULONG NumberOfBytesWritten OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtFlushVirtualMemory(
+			IN HANDLE ProcessHandle,
+			IN OUT PVOID* BaseAddress,
+			IN OUT PSIZE_T RegionSize,
+			OUT PIO_STATUS_BLOCK IoStatus
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwFlushVirtualMemory(
+			IN HANDLE ProcessHandle,
+			IN OUT PVOID* BaseAddress,
+			IN OUT PSIZE_T RegionSize,
+			OUT PIO_STATUS_BLOCK IoStatus
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQueryVirtualMemory(
+			IN HANDLE ProcessHandle,
+			IN PVOID BaseAddress,
+			IN MEMORY_INFORMATION_CLASS MemoryInformationClass,
+			OUT PVOID MemoryInformation,
+			IN SIZE_T MemoryInformationLength,
+			OUT PSIZE_T ReturnLength OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwQueryVirtualMemory(
+			IN HANDLE ProcessHandle,
+			IN PVOID BaseAddress,
+			IN MEMORY_INFORMATION_CLASS MemoryInformationClass,
+			OUT PVOID MemoryInformation,
+			IN SIZE_T MemoryInformationLength,
+			OUT PSIZE_T ReturnLength OPTIONAL
+		);
+
+	NTSYSAPI NTSTATUS NTAPI DbgUiIssueRemoteBreakin(IN HANDLE Process);
+
+	//-----------------------------------------------------------------------------
+	// Section functions
+
+	typedef enum _SECTION_INHERIT
+	{
+		ViewShare = 1,
+		ViewUnmap = 2
+
+	} SECTION_INHERIT;
+
+
+	typedef enum _SECTION_INFORMATION_CLASS
+	{
+		SectionBasicInformation,
+		SectionImageInformation
+
+	} SECTION_INFORMATION_CLASS, * PSECTION_INFORMATION_CLASS;
+
+
+	/*++
+
+	NtCreateSection
+	===============
+
+	Creates a section object.
+
+	SectionHandle - Points to a variable that will receive the section
+	object handle if the call is successful.
+
+	DesiredAccess - Specifies the type of access that the caller requires
+	to the section object. This parameter can be zero, or any combination
+	of the following flags:
+
+	SECTION_QUERY       - Query access
+	SECTION_MAP_WRITE   - Can be written when mapped
+	SECTION_MAP_READ    - Can be read when mapped
+	SECTION_MAP_EXECUTE - Can be executed when mapped
+	SECTION_EXTEND_SIZE - Extend access
+	SECTION_ALL_ACCESS  - All of the preceding +
+	STANDARD_RIGHTS_REQUIRED
+
+	ObjectAttributes - Points to a structure that specifies the object’s attributes.
+	OBJ_OPENLINK is not a valid attribute for a section object.
+
+	MaximumSize - Optionally points to a variable that specifies the size,
+	in bytes, of the section. If FileHandle is zero, the size must be
+	specified; otherwise, it can be defaulted from the size of the file
+	referred to by FileHandle.
+
+	SectionPageProtection - The protection desired for the pages
+	of the section when the section is mapped. This parameter can take
+	one of the following values:
+
+	PAGE_READONLY
+	PAGE_READWRITE
+	PAGE_WRITECOPY
+	PAGE_EXECUTE
+	PAGE_EXECUTE_READ
+	PAGE_EXECUTE_READWRITE
+	PAGE_EXECUTE_WRITECOPY
+
+	AllocationAttributes - The attributes for the section. This parameter must
+	be a combination of the following values:
+
+	SEC_BASED     0x00200000    // Map section at same address in each process
+	SEC_NO_CHANGE 0x00400000    // Disable changes to protection of pages
+	SEC_IMAGE     0x01000000    // Map section as an image
+	SEC_VLM       0x02000000    // Map section in VLM region
+	SEC_RESERVE   0x04000000    // Reserve without allocating pagefile storage
+	SEC_COMMIT    0x08000000    // Commit pages; the default behavior
+	SEC_NOCACHE   0x10000000    // Mark pages as non-cacheable
+
+	FileHandle - Identifies the file from which to create the section object.
+	The file must be opened with an access mode compatible with the protection
+	flags specified by the Protect parameter. If FileHandle is zero,
+	the function creates a section object of the specified size backed
+	by the paging file rather than by a named file in the file system.
+
+	--*/
+
+	typedef const CHAR* PCSZ;
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtCreateSection(
+			OUT PHANDLE SectionHandle,
+			IN  ACCESS_MASK DesiredAccess,
+			IN  POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL,
+			IN  PLARGE_INTEGER MaximumSize OPTIONAL,
+			IN  ULONG SectionPageProtection,
+			IN  ULONG AllocationAttributes,
+			IN  HANDLE FileHandle OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwCreateSection(
+			OUT PHANDLE SectionHandle,
+			IN  ACCESS_MASK DesiredAccess,
+			IN  POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL,
+			IN  PLARGE_INTEGER MaximumSize OPTIONAL,
+			IN  ULONG SectionPageProtection,
+			IN  ULONG AllocationAttributes,
+			IN  HANDLE FileHandle OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtOpenSection(
+			OUT PHANDLE SectionHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwOpenSection(
+			OUT PHANDLE SectionHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes
+		);
+
+
+	NTSYSAPI NTSTATUS NTAPI NtMapViewOfSection(
+		HANDLE          SectionHandle,
+		HANDLE          ProcessHandle,
+		PVOID* BaseAddress,
+		ULONG_PTR       ZeroBits,
+		SIZE_T          CommitSize,
+		PLARGE_INTEGER  SectionOffset,
+		PSIZE_T         ViewSize,
+		SECTION_INHERIT InheritDisposition,
+		ULONG           AllocationType,
+		ULONG           Win32Protect
+	);
+
+	NTSTATUS NTAPI 	RtlImageNtHeaderEx(_In_ ULONG Flags, _In_ PVOID Base, _In_ ULONG64 Size, _Out_ PIMAGE_NT_HEADERS* OutHeaders);
+
+	NTSYSAPI NTSTATUS NTAPI ZwAreMappedFilesTheSame(_In_ PVOID File1MappedAsAnImage, _In_ PVOID File2MappedAsFile);
+	NTSYSAPI NTSTATUS NTAPI NtAreMappedFilesTheSame(_In_ PVOID File1MappedAsAnImage, _In_ PVOID File2MappedAsFile);
+
+	NTSYSAPI NTSTATUS NTAPI RtlDosApplyFileIsolationRedirection_Ustr(IN ULONG 	Flags,
+		IN PUNICODE_STRING 	OriginalName,
+		IN PUNICODE_STRING 	Extension,
+		IN OUT PUNICODE_STRING 	StaticString,
+		IN OUT PUNICODE_STRING 	DynamicString,
+		IN OUT PUNICODE_STRING* NewName,
+		IN PULONG 	NewFlags,
+		IN PSIZE_T 	FileNameSize,
+		IN PSIZE_T 	RequiredLength
+	);
+
+	NTSYSAPI NTSTATUS NTAPI RtlGetVersion(
+		PRTL_OSVERSIONINFOW lpVersionInformation
+	);
+
+	NTSYSAPI NTSTATUS RtlCharToInteger(
+		PCSZ   String,
+		ULONG  Base,
+		PULONG Value
+	);
+
+	NTSYSAPI PVOID NTAPI RtlDecodeSystemPointer(IN PVOID Pointer);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwMapViewOfSection(
+			IN HANDLE SectionHandle,
+			IN HANDLE ProcessHandle,
+			IN OUT PVOID* BaseAddress,
+			IN ULONG ZeroBits,
+			IN ULONG CommitSize,
+			IN OUT PLARGE_INTEGER SectionOffset OPTIONAL,
+			IN OUT PULONG ViewSize,
+			IN SECTION_INHERIT InheritDisposition,
+			IN ULONG AllocationType,
+			IN ULONG Protect
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtUnmapViewOfSection(
+			IN HANDLE ProcessHandle,
+			IN PVOID BaseAddress
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwUnmapViewOfSection(
+			IN HANDLE ProcessHandle,
+			IN PVOID BaseAddress
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtExtendSection(
+			IN HANDLE SectionHandle,
+			IN OUT PLARGE_INTEGER SectionSize
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwExtendSection(
+			IN HANDLE SectionHandle,
+			IN OUT PLARGE_INTEGER SectionSize
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQuerySection(
+			IN HANDLE SectionHandle,
+			IN SECTION_INFORMATION_CLASS SectionInformationClass,
+			OUT PVOID SectionInformation,
+			IN ULONG Length,
+			OUT PULONG ResultLength OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwQuerySection(
+			IN HANDLE SectionHandle,
+			IN SECTION_INFORMATION_CLASS SectionInformationClass,
+			OUT PVOID SectionInformation,
+			IN ULONG Length,
+			OUT PULONG ResultLength OPTIONAL
+		);
+
+
+	//-----------------------------------------------------------------------------
+	// Synchronization
+
+	//
+	// Wait type
+	//
+
+	typedef enum _WAIT_TYPE {
+		WaitAll,
+		WaitAny
+	} WAIT_TYPE;
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtWaitForSingleObject(
+			IN HANDLE Handle,
+			IN BOOLEAN Alertable,
+			IN PLARGE_INTEGER Timeout OPTIONAL
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwWaitForSingleObject(
+			IN HANDLE Handle,
+			IN BOOLEAN Alertable,
+			IN PLARGE_INTEGER Timeout OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtWaitForMultipleObjects(
+			IN ULONG Count,
+			IN HANDLE Handle[],
+			IN WAIT_TYPE WaitType,
+			IN BOOLEAN Alertable,
+			IN PLARGE_INTEGER Timeout OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwWaitForMultipleObjects(
+			IN ULONG Count,
+			IN HANDLE Handle[],
+			IN WAIT_TYPE WaitType,
+			IN BOOLEAN Alertable,
+			IN PLARGE_INTEGER Timeout OPTIONAL
+		);
+
+
+	//-----------------------------------------------------------------------------
+	// Event support
+
+	typedef enum _EVENT_INFORMATION_CLASS {
+		EventBasicInformation    // = 0
+	} EVENT_INFORMATION_CLASS;
+
+	typedef struct _EVENT_BASIC_INFORMATION {
+		EVENT_TYPE EventType;
+		LONG EventState;
+	} EVENT_BASIC_INFORMATION, * PEVENT_BASIC_INFORMATION;
+
+	//
+	// Event handling routines
+	//
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtCreateEvent(
+			OUT PHANDLE EventHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL,
+			IN EVENT_TYPE EventType,
+			IN BOOLEAN InitialState
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwCreateEvent(
+			OUT PHANDLE EventHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL,
+			IN EVENT_TYPE EventType,
+			IN BOOLEAN InitialState
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtClearEvent(
+			IN HANDLE Handle
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwClearEvent(
+			IN HANDLE Handle
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtPulseEvent(
+			IN HANDLE Handle,
+			OUT PLONG PreviousState OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwPulseEvent(
+			IN HANDLE Handle,
+			OUT PLONG PreviousState OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtResetEvent(
+			IN HANDLE Handle,
+			OUT PLONG PreviousState OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwResetEvent(
+			IN HANDLE Handle,
+			OUT PLONG PreviousState OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtSetEvent(
+			IN HANDLE Handle,
+			OUT PLONG PreviousState OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwSetEvent(
+			IN HANDLE Handle,
+			OUT PLONG PreviousState OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtOpenEvent(
+			OUT PHANDLE EventHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwOpenEvent(
+			OUT PHANDLE EventHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQueryEvent(
+			IN HANDLE EventHandle,
+			IN EVENT_INFORMATION_CLASS EventInfoClass,
+			OUT PVOID EventInfo,
+			IN ULONG Length,
+			OUT PULONG ResultLength OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwQueryEvent(
+			IN HANDLE EventHandle,
+			IN EVENT_INFORMATION_CLASS EventInfoClass,
+			OUT PVOID EventInfo,
+			IN ULONG Length,
+			OUT PULONG ResultLength OPTIONAL
+		);
+
+
+	//-----------------------------------------------------------------------------
+	// Mutant support
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtCreateMutant(
+			OUT PHANDLE MutantHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL,
+			IN BOOLEAN InitialOwner
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtOpenMutant(
+			OUT PHANDLE MutantHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL
+		);
+
+	//-----------------------------------------------------------------------------
+	// Semaphore support
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtCreateSemaphore(
+			OUT PHANDLE SemaphoreHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL,
+			IN ULONG InitialCount,
+			IN ULONG MaximumCount
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtOpenSemaphore(
+			OUT PHANDLE SemaphoreHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL
+		);
+
+	//-----------------------------------------------------------------------------
+	// EventPair support
+
+#define EVENT_PAIR_ALL_ACCESS ( STANDARD_RIGHTS_REQUIRED | SYNCHRONIZE )
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtCreateEventPair(
+			OUT PHANDLE EventPairHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtOpenEventPair(
+			OUT PHANDLE EventPairHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL
+		);
+
+
+	//-----------------------------------------------------------------------------
+	// Security descriptor functions
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlCreateSecurityDescriptor(
+			IN PSECURITY_DESCRIPTOR SecurityDescriptor,
+			IN ULONG Revision
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlGetDaclSecurityDescriptor(
+			IN PSECURITY_DESCRIPTOR  SecurityDescriptor,
+			OUT PBOOLEAN  DaclPresent,
+			OUT PACL* Dacl,
+			OUT PBOOLEAN  DaclDefaulted
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlSetDaclSecurityDescriptor(
+			IN PSECURITY_DESCRIPTOR SecurityDescriptor,
+			IN BOOLEAN DaclPresent,
+			IN PACL Dacl OPTIONAL,
+			IN BOOLEAN DaclDefaulted OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlSetOwnerSecurityDescriptor(
+			IN PSECURITY_DESCRIPTOR SecurityDescriptor,
+			IN PSID Owner OPTIONAL,
+			IN BOOLEAN OwnerDefaulted OPTIONAL
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlAllocateAndInitializeSid(
+			IN PSID_IDENTIFIER_AUTHORITY IdentifierAuthority,
+			IN UCHAR SubAuthorityCount,
+			IN ULONG SubAuthority0,
+			IN ULONG SubAuthority1,
+			IN ULONG SubAuthority2,
+			IN ULONG SubAuthority3,
+			IN ULONG SubAuthority4,
+			IN ULONG SubAuthority5,
+			IN ULONG SubAuthority6,
+			IN ULONG SubAuthority7,
+			OUT PSID* Sid
+		);
+
+
+	NTSYSAPI
+		ULONG
+		NTAPI
+		RtlLengthSid(
+			IN PSID Sid
+		);
+
+
+	NTSYSAPI
+		BOOLEAN
+		NTAPI
+		RtlEqualSid(
+			IN PSID Sid1,
+			IN PSID Sid2
+		);
+
+
+	NTSYSAPI
+		PVOID
+		NTAPI
+		RtlFreeSid(
+			IN PSID Sid
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlCreateAcl(
+			IN PACL Acl,
+			IN ULONG AclLength,
+			IN ULONG AclRevision
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlGetAce(
+			IN PACL Acl,
+			IN ULONG AceIndex,
+			OUT PVOID* Ace
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlAddAccessAllowedAce(
+			IN OUT PACL Acl,
+			IN ULONG AceRevision,
+			IN ACCESS_MASK AccessMask,
+			IN PSID Sid
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlAddAccessAllowedAceEx(
+			IN OUT PACL Acl,
+			IN ULONG AceRevision,
+			IN ULONG AceFlags,
+			IN ULONG AccessMask,
+			IN PSID Sid
+		);
+
+	//-----------------------------------------------------------------------------
+	// Token functions
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtOpenProcessToken(
+			IN HANDLE ProcessHandle,
+			IN ACCESS_MASK DesiredAccess,
+			OUT PHANDLE TokenHandle
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtOpenThreadToken(
+			IN HANDLE ThreadHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN BOOLEAN OpenAsSelf,
+			OUT PHANDLE TokenHandle
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQueryInformationToken(
+			IN HANDLE  TokenHandle,
+			IN TOKEN_INFORMATION_CLASS  TokenInformationClass,
+			OUT PVOID  TokenInformation,
+			IN ULONG  TokenInformationLength,
+			OUT PULONG  ReturnLength
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwQueryInformationToken(
+			IN HANDLE  TokenHandle,
+			IN TOKEN_INFORMATION_CLASS  TokenInformationClass,
+			OUT PVOID  TokenInformation,
+			IN ULONG  TokenInformationLength,
+			OUT PULONG  ReturnLength
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtSetInformationToken(
+			IN HANDLE  TokenHandle,
+			IN TOKEN_INFORMATION_CLASS  TokenInformationClass,
+			IN PVOID  TokenInformation,
+			IN ULONG  TokenInformationLength
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtAdjustPrivilegesToken(
+			IN HANDLE TokenHandle,
+			IN BOOLEAN DisableAllPrivileges,
+			IN PTOKEN_PRIVILEGES NewState OPTIONAL,
+			IN ULONG BufferLength OPTIONAL,
+			IN PTOKEN_PRIVILEGES PreviousState OPTIONAL,
+			OUT PULONG ReturnLength
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtDuplicateToken(
+			IN HANDLE ExistingTokenHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes,
+			IN BOOLEAN EffectiveOnly,
+			IN TOKEN_TYPE TokenType,
+			OUT PHANDLE NewTokenHandle
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtCompareTokens(
+			IN  HANDLE FirstTokenHandle,
+			IN  HANDLE SecondTokenHandle,
+			OUT PBOOLEAN IdenticalTokens
+		);
+
+
+	//-----------------------------------------------------------------------------
+	// Symbolic links
+
+	//
+	// Object Manager Symbolic Link Specific Access Rights.
+	//
+
+#ifndef SYMBOLIC_LINK_QUERY
+#define SYMBOLIC_LINK_QUERY (0x0001)
+#define SYMBOLIC_LINK_ALL_ACCESS (STANDARD_RIGHTS_REQUIRED | 0x1)
+#endif
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtCreateSymbolicLinkObject(
+			OUT PHANDLE SymbolicLinkHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes,
+			IN PUNICODE_STRING DestinationName
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtOpenSymbolicLinkObject(
+			OUT PHANDLE SymbolicLinkHandle,
+			IN ACCESS_MASK DesiredAccess,
+			IN POBJECT_ATTRIBUTES ObjectAttributes
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtQuerySymbolicLinkObject(
+			IN HANDLE SymbolicLinkHandle,
+			OUT PUNICODE_STRING NameString,
+			OUT PULONG ResultLength OPTIONAL
+		);
+
+	//-----------------------------------------------------------------------------
+	// Loader functions
+
+#define LDR_DLL_NOTIFICATION_REASON_LOADED 1
+#define LDR_DLL_NOTIFICATION_REASON_UNLOADED 2
+
+	typedef struct _LDR_DLL_NOTIFICATION_DATA {
+		ULONG Flags;                    //Reserved.
+		PCUNICODE_STRING FullDllName;   //The full path name of the DLL module.
+		PCUNICODE_STRING BaseDllName;   //The base file name of the DLL module.
+		PVOID DllBase;                  //A pointer to the base address for the DLL in memory.
+		ULONG SizeOfImage;              //The size of the DLL image, in bytes.
+	} LDR_DLL_NOTIFICATION_DATA, * PLDR_DLL_NOTIFICATION_DATA;
+
+	typedef VOID(CALLBACK* PLDR_DLL_NOTIFICATION_FUNCTION)(
+		_In_     ULONG							NotificationReason,
+		_In_     PLDR_DLL_NOTIFICATION_DATA		NotificationData,
+		_In_opt_ PVOID							Context
+		);
+
+	typedef VOID(NTAPI LDR_ENUM_CALLBACK)(
+		_In_ PLDR_DATA_TABLE_ENTRY ModuleInformation,
+		_In_ PVOID Parameter,
+		_Out_ BOOLEAN* Stop);
+
+	typedef LDR_ENUM_CALLBACK* PLDR_ENUM_CALLBACK;
+
+	static NTSTATUS(NTAPI* LdrRegisterDllNotification)(
+		_In_     ULONG                          Flags,
+		_In_     PLDR_DLL_NOTIFICATION_FUNCTION NotificationFunction,
+		_In_opt_ PVOID                          Context,
+		_Out_    PVOID* Cookie
+		) = nullptr;
+
+	static NTSTATUS(NTAPI* LdrUnregisterDllNotification)(
+		_In_ PVOID Cookie
+		) = nullptr;
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		LdrEnumerateLoadedModules(
+			IN BOOLEAN 	ReservedFlag,
+			IN PLDR_ENUM_CALLBACK 	EnumProc,
+			IN PVOID 	Context
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		LdrLoadDll(
+			IN PWSTR DllPath OPTIONAL,
+			IN PULONG DllCharacteristics OPTIONAL,
+			IN PUNICODE_STRING DllName,
+			OUT PVOID* DllHandle
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		LdrGetDllHandle(
+			IN PWSTR DllPath OPTIONAL,
+			IN PULONG DllCharacteristics OPTIONAL,
+			IN PUNICODE_STRING DllName,
+			OUT PVOID* DllHandle
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		LdrUnloadDll(
+			IN PVOID DllHandle
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		LdrGetProcedureAddress(
+			IN PVOID DllHandle,
+			IN PANSI_STRING ProcedureName OPTIONAL,
+			IN ULONG ProcedureNumber OPTIONAL,
+			OUT PVOID* ProcedureAddress
+		);
+
+	//-----------------------------------------------------------------------------
+	// Driver functions
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtLoadDriver(
+			PUNICODE_STRING DriverServiceName
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwLoadDriver(
+			PUNICODE_STRING DriverServiceName
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtUnloadDriver(
+			PUNICODE_STRING DriverServiceName
+		);
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		ZwUnloadDriver(
+			PUNICODE_STRING DriverServiceName
+		);
+
+	NTSYSAPI VOID NTAPI RtlInitializeSRWLock(OUT PRTL_SRWLOCK SRWLock);
+
+	NTSYSAPI VOID NTAPI RtlAcquireSRWLockShared(IN OUT PRTL_SRWLOCK SRWLock);
+
+	NTSYSAPI VOID NTAPI RtlReleaseSRWLockShared(IN OUT PRTL_SRWLOCK SRWLock);
+
+	NTSYSAPI VOID NTAPI RtlAcquireSRWLockExclusive(IN OUT PRTL_SRWLOCK SRWLock);
+
+	NTSYSAPI VOID NTAPI RtlReleaseSRWLockExclusive(IN OUT PRTL_SRWLOCK SRWLock);
+
+	//-----------------------------------------------------------------------------
+	// Functions dealing with NTSTATUS and Win32 error
+
+	NTSYSAPI
+		ULONG
+		NTAPI
+		RtlNtStatusToDosError(
+			NTSTATUS Status
+		);
+
+
+	NTSYSAPI
+		ULONG
+		NTAPI
+		RtlNtStatusToDosErrorNoTeb(
+			NTSTATUS Status
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		RtlGetLastNtStatus(
+		);
+
+
+	NTSYSAPI
+		ULONG
+		NTAPI
+		RtlGetLastWin32Error(
+		);
+
+
+	NTSYSAPI
+		VOID
+		NTAPI
+		RtlSetLastWin32Error(
+			ULONG WinError
+		);
+
+
+	NTSYSAPI
+		VOID
+		NTAPI
+		RtlSetLastWin32ErrorAndNtStatusFromNtStatus(
+			NTSTATUS Status
+		);
+
+
+	//-----------------------------------------------------------------------------
+	// Other functions
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtAllocateLocallyUniqueId(
+			OUT PLUID LocallyUniqueId
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtDelayExecution(
+			IN BOOLEAN Alertable,
+			IN PLARGE_INTEGER DelayInterval
+		);
+
+
+	NTSYSAPI
+		NTSTATUS
+		NTAPI
+		NtDisplayString(
+			IN PUNICODE_STRING String
+		);
+
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
+
+#endif // __NTDLL_H__
